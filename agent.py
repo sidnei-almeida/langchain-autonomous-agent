@@ -252,16 +252,18 @@ def create_scientific_agent():
     # 2. The Brain (LLM)
     # We use Llama 3 70B because it's excellent at following complex instructions
     # Note: llama-3.1-70b-versatile was decommissioned, using llama-3.3-70b-versatile
+    # Configure Groq for tool calling compatibility
     llm = ChatGroq(
         model_name="llama-3.3-70b-versatile", 
-        temperature=0
+        temperature=0,
+        max_tokens=4096  # Ensure enough tokens for tool calling
     )
 
     # 3. Scientific Tools Configuration
     # Web Search (DuckDuckGo)
     web_search = DuckDuckGoSearchRun(
         name="web_search",
-        description="Searches for up-to-date information on the internet using DuckDuckGo. Use for news, recent events, and general information. Input should be a search query string."
+        description="Searches for up-to-date information on the internet using DuckDuckGo. Use for news, recent events, and general information."
     )
     
     # Wikipedia (Encyclopedia)
@@ -269,23 +271,25 @@ def create_scientific_agent():
     wikipedia = WikipediaQueryRun(
         api_wrapper=wikipedia_api,
         name="wikipedia",
-        description="Searches for detailed and encyclopedic information on Wikipedia. Ideal for concepts, biographies, historical events, and in-depth explanations. Input should be a search query string."
+        description="Searches for detailed and encyclopedic information on Wikipedia. Ideal for concepts, biographies, historical events, and in-depth explanations."
     )
     
     # ArXiv (Scientific Articles) - Custom tool with full URLs and details
+    # Ensure it has a proper name for Groq compatibility
     arxiv_tool = search_scientific_papers
+    arxiv_tool.name = "search_scientific_papers"
     
     # Scientific Calculator
     calc = calculator
+    calc.name = "calculator"
     
     # List of all tools - ensure they have proper names
     tools = [web_search, wikipedia, arxiv_tool, calc]
 
     # 4. Creating the Scientific Agent with LangGraph
-    # Note: Groq requires explicit tool binding for proper tool calling
-    # We bind tools to the LLM first, then pass to create_react_agent
-    llm_with_tools = llm.bind_tools(tools)
-    agent = create_react_agent(llm_with_tools, tools)
+    # Note: create_react_agent handles tool binding internally
+    # For Groq, we pass tools directly and let LangGraph handle the binding
+    agent = create_react_agent(llm, tools)
     
     return agent
 
