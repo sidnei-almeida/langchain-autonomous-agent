@@ -251,13 +251,16 @@ def create_scientific_agent():
 
     # 2. The Brain (LLM)
     # We use Llama 3 70B because it's excellent at following complex instructions
-    llm = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0)
+    llm = ChatGroq(
+        model_name="llama-3.3-70b-versatile", 
+        temperature=0
+    )
 
     # 3. Scientific Tools Configuration
     # Web Search (DuckDuckGo)
     web_search = DuckDuckGoSearchRun(
         name="web_search",
-        description="Searches for up-to-date information on the internet using DuckDuckGo. Use for news, recent events, and general information."
+        description="Searches for up-to-date information on the internet using DuckDuckGo. Use for news, recent events, and general information. Input should be a search query string."
     )
     
     # Wikipedia (Encyclopedia)
@@ -265,7 +268,7 @@ def create_scientific_agent():
     wikipedia = WikipediaQueryRun(
         api_wrapper=wikipedia_api,
         name="wikipedia",
-        description="Searches for detailed and encyclopedic information on Wikipedia. Ideal for concepts, biographies, historical events, and in-depth explanations."
+        description="Searches for detailed and encyclopedic information on Wikipedia. Ideal for concepts, biographies, historical events, and in-depth explanations. Input should be a search query string."
     )
     
     # ArXiv (Scientific Articles) - Custom tool with full URLs and details
@@ -274,11 +277,12 @@ def create_scientific_agent():
     # Scientific Calculator
     calc = calculator
     
-    # List of all tools
+    # List of all tools - ensure they have proper names
     tools = [web_search, wikipedia, arxiv_tool, calc]
 
     # 4. Creating the Scientific Agent with LangGraph
-    # Note: create_react_agent doesn't accept state_modifier parameter
+    # Note: create_react_agent handles tool binding internally
+    # For Groq compatibility, ensure tools have proper schemas
     # We'll add the system message to each conversation instead
     agent = create_react_agent(llm, tools)
     
