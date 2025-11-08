@@ -251,8 +251,9 @@ def create_scientific_agent():
 
     # 2. The Brain (LLM)
     # We use Llama 3 70B because it's excellent at following complex instructions
+    # Note: Using llama-3.1-70b-versatile for better tool calling compatibility
     llm = ChatGroq(
-        model_name="llama-3.3-70b-versatile", 
+        model_name="llama-3.1-70b-versatile", 
         temperature=0
     )
 
@@ -281,9 +282,8 @@ def create_scientific_agent():
     tools = [web_search, wikipedia, arxiv_tool, calc]
 
     # 4. Creating the Scientific Agent with LangGraph
-    # Note: create_react_agent handles tool binding internally
-    # For Groq compatibility, ensure tools have proper schemas
-    # We'll add the system message to each conversation instead
+    # Note: Using llama-3.1-70b-versatile for better Groq tool calling compatibility
+    # The create_react_agent handles tool binding internally
     agent = create_react_agent(llm, tools)
     
     return agent
