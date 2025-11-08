@@ -192,17 +192,8 @@ async def query_agent(request: QueryRequest):
                 processing_time=round(time.time() - start_time, 2)
             )
         
-        # Extract tools used (if available in the result)
-        tools_used = []
-        if "messages" in result:
-            # Check for tool messages
-            for msg in messages:
-                if hasattr(msg, 'name') and msg.name:
-                    # This is a tool message
-                    tools_used.append(msg.name)
-                elif hasattr(msg, 'tool_calls') and msg.tool_calls:
-                    # This is an AI message with tool calls
-                    tools_used.extend([tc.get('name', 'unknown') for tc in msg.tool_calls])
+        # Extract tools used - now from the custom agent result
+        tools_used = result.get('tools_used', [])
         
         # Remove duplicates and clean up
         tools_used = list(set(tools_used)) if tools_used else None
@@ -303,16 +294,8 @@ async def chat_with_agent(request: ChatRequest):
                 processing_time=round(time.time() - start_time, 2)
             )
         
-        # Extract tools used
-        tools_used = []
-        if "messages" in result:
-            for msg in messages:
-                if hasattr(msg, 'name') and msg.name:
-                    # This is a tool message
-                    tools_used.append(msg.name)
-                elif hasattr(msg, 'tool_calls') and msg.tool_calls:
-                    # This is an AI message with tool calls
-                    tools_used.extend([tc.get('name', 'unknown') for tc in msg.tool_calls])
+        # Extract tools used - now from the custom agent result
+        tools_used = result.get('tools_used', [])
         
         # Remove duplicates and clean up
         tools_used = list(set(tools_used)) if tools_used else None

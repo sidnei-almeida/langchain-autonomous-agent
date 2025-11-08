@@ -6,14 +6,14 @@ from langchain_community.tools import (
     WikipediaQueryRun,
 )
 from langchain_community.utilities import WikipediaAPIWrapper
-from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_core.tools import tool
+from langchain_core.prompts import ChatPromptTemplate
 import math
 import arxiv
+import re
+import json
 
 # Scientific Calculator Tool
-@tool
 def calculator(expression: str) -> str:
     """Performs complex mathematical calculations including scientific functions.
     
@@ -63,7 +63,6 @@ def calculator(expression: str) -> str:
 
 
 # ArXiv Search Tool with URLs
-@tool
 def search_scientific_papers(query: str) -> str:
     """
     Search for scientific papers on ArXiv that discuss or affirm specific topics or claims.
@@ -147,98 +146,166 @@ def search_scientific_papers(query: str) -> str:
 
 
 # System message for the scientific agent
-SYSTEM_MESSAGE = (
-    "You are a brilliant scientist and researcher with a sharp sense of humor and a talent for "
-    "making complex topics entertaining. Think of yourself as a scientific comedian - you're like "
-    "Dave Chappelle meets Neil deGrasse Tyson. You're smart, funny, observant, and you don't take "
-    "yourself too seriously, but you always deliver accurate, evidence-based information.\n\n"
-    "Your personality:\n"
-    "- Witty and observant with clever observations about science and life\n"
-    "- Use humor to make complex topics more accessible and engaging\n"
-    "- Make smart jokes and analogies that help people understand science better\n"
-    "- Be confident and charismatic in your explanations\n"
-    "- Add personality and flair to your responses while staying accurate\n"
-    "- Use casual, conversational language mixed with scientific precision\n"
-    "- Make observations that are both funny and insightful\n"
-    "- Sprinkle jokes and witty observations throughout your answers, not just at the beginning\n"
-    "- Use Dave Chappelle-style observational humor applied to science\n\n"
-    "Humor style examples (Dave Chappelle-inspired, science-focused):\n"
-    "- 'You know what's wild? We're made of stardust, but we stress about what to wear. The universe "
-    "is literally inside us, and we're worried about our Wi-Fi password.'\n"
-    "- 'Scientists spend years studying black holes, but we still can't figure out why socks disappear "
-    "in the dryer. That's the real mystery.'\n"
-    "- 'Einstein said time is relative, and I believe him because waiting for my coffee to brew feels "
-    "like an eternity, but a good nap feels like 5 minutes.'\n"
-    "- 'We can calculate the exact distance to Mars, but we can't make a printer that works on the "
-    "first try. Priorities, people.'\n"
-    "- 'Quantum physics says particles can be in two places at once. My keys, however, can only be in "
-    "one place - and it's never where I left them.'\n"
-    "- 'The speed of light is 186,000 miles per second, but my internet connection? That's a different "
-    "story.'\n"
-    "- 'We've mapped the human genome, but we still don't know why we need to sneeze when we look at "
-    "the sun. Science is weird, man.'\n"
-    "- 'Scientists discovered that octopuses have three hearts. Meanwhile, I'm over here trying to "
-    "figure out if I left the stove on.'\n\n"
-    "You have access to the following tools:\n"
-    "- web_search: For up-to-date information, news, and recent events\n"
-    "- wikipedia: For detailed encyclopedic information and general concepts\n"
-    "- search_scientific_papers: For finding scientific articles on ArXiv - THIS IS YOUR RESEARCH FINDER! "
-    "Returns complete paper info with URLs!\n"
-    "- calculator: For complex mathematical and scientific calculations\n\n"
-    "RESEARCH SEARCH GUIDELINES (Keep it funny!):\n"
-    "- When users ask to 'find research about X', 'find studies on Y', 'find papers that say X is Y', "
-    "'find research that affirms Z' - IMMEDIATELY use search_scientific_papers tool!\n"
-    "- Convert user claims into search queries:\n"
-    "  * 'find research that says cats are smaller than dogs' -> search_scientific_papers('cats dogs size comparison')\n"
-    "  * 'find papers that affirm meditation reduces stress' -> search_scientific_papers('meditation stress reduction')\n"
-    "  * 'find research about quantum computing' -> search_scientific_papers('quantum computing')\n"
-    "- The tool returns papers with ALL details: title, authors, abstract, date, ArXiv URL, PDF URL, categories\n"
-    "- When presenting research papers:\n"
-    "  * Keep the formatted structure from the tool (it's already nicely formatted with emojis)\n"
-    "  * Add your comedic commentary BEFORE or AFTER the paper details\n"
-    "  * Make URLs clickable in your response by keeping them as-is\n"
-    "  * Highlight the most relevant papers if multiple are found\n"
-    "  * Make jokes about the research, but always respect the science\n"
-    "- Present URLs clearly: 'You can read the full paper here: [URL]' or 'PDF available at: [URL]'\n"
-    "- If multiple papers are found, joke about how productive scientists are!\n"
-    "- If no papers are found, use humor to suggest why or offer alternative search terms\n"
-    "- When someone asks 'find research that says X is Y', search for papers on that topic and "
-    "present findings with your signature comedic style\n"
-    "- If the claim is non-scientific (like personal stuff), use humor to explain that ArXiv doesn't "
-    "have papers on that, but you can search for related scientific topics\n\n"
-    "IMPORTANT GUIDELINES:\n"
-    "- ALWAYS provide a response, even if you cannot find specific information - make it funny and helpful\n"
-    "- Sprinkle jokes and witty observations throughout your answers naturally\n"
-    "- Use humor to break up long explanations and keep people engaged\n"
-    "- Make jokes that relate to the science you're explaining\n"
-    "- When finding research papers, make it exciting and fun - like you're discovering treasure!\n"
-    "- If a question is outside your scientific expertise, acknowledge it with humor and redirect gracefully\n"
-    "- For non-scientific questions, use your wit to explain why you're better at science stuff\n"
-    "- Never return an error - always respond with personality and humor\n"
-    "- When explaining science, use analogies, jokes, and observations that make it memorable\n"
-    "- Be entertaining but never sacrifice accuracy - you're still a scientist first\n"
-    "- Use your tools to find real information, then present it in your unique, funny style\n"
-    "- Make people laugh while they learn - that's your superpower\n"
-    "- If tools fail, handle it with humor and still try to help\n"
-    "- Your humor should be smart, observational, and relatable - like Dave Chappelle but for science\n"
-    "- Don't force jokes - let them flow naturally from the science you're explaining\n"
-    "- When presenting research papers, make it feel like you're sharing cool discoveries with a friend"
-)
+SYSTEM_MESSAGE = """You are a brilliant scientist and researcher with a sharp sense of humor and a talent for making complex topics entertaining. Think of yourself as a scientific comedian - you're like Dave Chappelle meets Neil deGrasse Tyson. You're smart, funny, observant, and you don't take yourself too seriously, but you always deliver accurate, evidence-based information.
 
-def prepare_messages(messages):
-    """Prepare messages with system message if not already present."""
-    # Check if first message is already a SystemMessage
-    if messages and isinstance(messages[0], SystemMessage):
-        return messages
+Your personality:
+- Witty and observant with clever observations about science and life
+- Use humor to make complex topics more accessible and engaging
+- Make smart jokes and analogies that help people understand science better
+- Be confident and charismatic in your explanations
+- Add personality and flair to your responses while staying accurate
+- Use casual, conversational language mixed with scientific precision
+- Make observations that are both funny and insightful
+- Sprinkle jokes and witty observations throughout your answers, not just at the beginning
+- Use Dave Chappelle-style observational humor applied to science
+
+Humor style examples (Dave Chappelle-inspired, science-focused):
+- 'You know what's wild? We're made of stardust, but we stress about what to wear. The universe is literally inside us, and we're worried about our Wi-Fi password.'
+- 'Scientists spend years studying black holes, but we still can't figure out why socks disappear in the dryer. That's the real mystery.'
+- 'Einstein said time is relative, and I believe him because waiting for my coffee to brew feels like an eternity, but a good nap feels like 5 minutes.'
+
+IMPORTANT GUIDELINES:
+- ALWAYS provide a response, even if you cannot find specific information - make it funny and helpful
+- Sprinkle jokes and witty observations throughout your answers naturally
+- Use humor to break up long explanations and keep people engaged
+- Make jokes that relate to the science you're explaining
+- If a question is outside your scientific expertise, acknowledge it with humor and redirect gracefully
+- For non-scientific questions, use your wit to explain why you're better at science stuff
+- Never return an error - always respond with personality and humor
+- When explaining science, use analogies, jokes, and observations that make it memorable
+- Be entertaining but never sacrifice accuracy - you're still a scientist first
+- Make people laugh while they learn - that's your superpower
+- Your humor should be smart, observational, and relatable - like Dave Chappelle but for science
+- Don't force jokes - let them flow naturally from the science you're explaining
+
+When you need to use tools, you can mention that you're searching for information, but then provide a conversational response based on your knowledge and the context."""
+
+class SimpleScientificAgent:
+    """A simple scientific agent that works reliably with Groq without native tool calling."""
     
-    # Add system message at the beginning
-    return [SystemMessage(content=SYSTEM_MESSAGE)] + messages
+    def __init__(self, llm, tools_dict):
+        self.llm = llm
+        self.tools = tools_dict
+        
+    def _should_use_tool(self, message: str) -> tuple:
+        """Determine if we should use a tool based on the message content."""
+        message_lower = message.lower()
+        
+        # Check for research paper requests
+        if any(keyword in message_lower for keyword in ['find research', 'find papers', 'find article', 'find studies', 'arxiv', 'scientific papers']):
+            # Extract the query
+            patterns = [
+                r'find (?:research|papers|articles|studies) (?:about|on|that say|that affirm) (.+)',
+                r'search (?:for )?(?:research|papers|articles) (?:about|on) (.+)',
+                r'(?:research|papers|articles) (?:about|on) (.+)'
+            ]
+            for pattern in patterns:
+                match = re.search(pattern, message_lower)
+                if match:
+                    query = match.group(1).strip()
+                    return ('search_scientific_papers', query)
+            # Default to the whole message if no specific pattern
+            return ('search_scientific_papers', message)
+        
+        # Check for calculations
+        if any(keyword in message_lower for keyword in ['calculate', 'compute', 'what is', 'how much is']) and any(char in message for char in ['+', '-', '*', '/', '=', '²', '³']):
+            # Try to extract the mathematical expression
+            # Simple heuristic: look for numbers and operators
+            calc_pattern = r'[\d\+\-\*/\(\)\.\^\s]+'
+            matches = re.findall(calc_pattern, message)
+            if matches:
+                expr = max(matches, key=len).strip()
+                return ('calculator', expr)
+        
+        # Check for web search
+        if any(keyword in message_lower for keyword in ['latest', 'recent', 'news', 'current', 'today', 'now', 'how many people']):
+            return ('web_search', message)
+        
+        # Check for Wikipedia
+        if any(keyword in message_lower for keyword in ['what is', 'who is', 'explain', 'tell me about', 'define']):
+            return ('wikipedia', message)
+        
+        return (None, None)
+    
+    def invoke(self, inputs: dict) -> dict:
+        """Process a message and return a response."""
+        messages = inputs.get('messages', [])
+        
+        # Prepare messages with system message
+        if not messages or not isinstance(messages[0], SystemMessage):
+            messages = [SystemMessage(content=SYSTEM_MESSAGE)] + messages
+        
+        # Get the last user message
+        last_user_message = None
+        for msg in reversed(messages):
+            if isinstance(msg, HumanMessage):
+                last_user_message = msg.content
+                break
+        
+        if not last_user_message:
+            return {
+                'messages': messages + [AIMessage(content="I didn't receive a question. Ask me something about science!")]
+            }
+        
+        # Check if we should use a tool
+        tool_name, tool_input = self._should_use_tool(last_user_message)
+        
+        tool_results = []
+        tools_used = []
+        
+        if tool_name and tool_name in self.tools:
+            try:
+                tool_result = self.tools[tool_name](tool_input)
+                tool_results.append(f"\n\n[Tool: {tool_name}]\n{tool_result}\n")
+                tools_used.append(tool_name)
+            except Exception as e:
+                tool_results.append(f"\n\n[Tool: {tool_name} - Error: {str(e)}]\n")
+        
+        # Build the context for the LLM
+        context_messages = messages.copy()
+        
+        # If we have tool results, add them as context
+        if tool_results:
+            tool_context = "".join(tool_results)
+            context_messages.append(HumanMessage(content=f"{last_user_message}\n\n[Additional Context from Research Tools]:{tool_context}"))
+        
+        # Get response from LLM
+        try:
+            response = self.llm.invoke(context_messages)
+            response_content = response.content if hasattr(response, 'content') else str(response)
+            
+            # Add the response to messages
+            result_messages = messages + [AIMessage(content=response_content)]
+            
+            return {
+                'messages': result_messages,
+                'tools_used': tools_used
+            }
+        except Exception as e:
+            # Fallback response
+            error_response = (
+                f"Alright, so I hit a little technical snag there. {str(e)[:100]}\n\n"
+                "But hey, I'm still here! I'm a scientific research agent - think of me as your "
+                "nerdy friend who's really good at finding research papers, explaining complex "
+                "science stuff, and making you laugh while doing it.\n\n"
+                "Try asking me about:\n"
+                "- Finding research papers (I'll search ArXiv for you!)\n"
+                "- Explaining scientific concepts\n"
+                "- Current scientific news and discoveries\n"
+                "- Mathematical calculations\n\n"
+                "Let's talk science! 🔬"
+            )
+            
+            result_messages = messages + [AIMessage(content=error_response)]
+            return {
+                'messages': result_messages,
+                'tools_used': []
+            }
+
 
 def create_scientific_agent():
     """Creates and returns a configured scientific agent."""
     # 1. Initial Configuration
-    # Load Groq API key from .env file (if exists) or environment variables
-    # This works for both local development (.env) and Hugging Face Spaces (secrets)
     load_dotenv()
     
     # Verify API key is available
@@ -249,49 +316,39 @@ def create_scientific_agent():
             "as an environment variable (for Hugging Face Spaces, use secrets)."
         )
 
-    # 2. The Brain (LLM)
-    # We use Llama 3 70B because it's excellent at following complex instructions
-    # Note: llama-3.1-70b-versatile was decommissioned, using llama-3.3-70b-versatile
-    # Configure Groq for tool calling compatibility
+    # 2. The Brain (LLM) - Simple configuration for Groq
     llm = ChatGroq(
         model_name="llama-3.3-70b-versatile", 
-        temperature=0,
-        max_tokens=4096  # Ensure enough tokens for tool calling
+        temperature=0.7,  # Slightly more creative for humor
+        max_tokens=2048
     )
 
-    # 3. Scientific Tools Configuration
-    # Web Search (DuckDuckGo)
-    web_search = DuckDuckGoSearchRun(
-        name="web_search",
-        description="Searches for up-to-date information on the internet using DuckDuckGo. Use for news, recent events, and general information."
-    )
-    
-    # Wikipedia (Encyclopedia)
+    # 3. Scientific Tools - Simple functions
+    web_search_tool = DuckDuckGoSearchRun()
     wikipedia_api = WikipediaAPIWrapper()
-    wikipedia = WikipediaQueryRun(
-        api_wrapper=wikipedia_api,
-        name="wikipedia",
-        description="Searches for detailed and encyclopedic information on Wikipedia. Ideal for concepts, biographies, historical events, and in-depth explanations."
-    )
+    wikipedia_tool = WikipediaQueryRun(api_wrapper=wikipedia_api)
     
-    # ArXiv (Scientific Articles) - Custom tool with full URLs and details
-    # Ensure it has a proper name for Groq compatibility
-    arxiv_tool = search_scientific_papers
-    arxiv_tool.name = "search_scientific_papers"
-    
-    # Scientific Calculator
-    calc = calculator
-    calc.name = "calculator"
-    
-    # List of all tools - ensure they have proper names
-    tools = [web_search, wikipedia, arxiv_tool, calc]
+    # Create tools dictionary
+    tools_dict = {
+        'web_search': lambda q: web_search_tool.run(q),
+        'wikipedia': lambda q: wikipedia_tool.run(q),
+        'search_scientific_papers': search_scientific_papers,
+        'calculator': calculator
+    }
 
-    # 4. Creating the Scientific Agent with LangGraph
-    # Using create_react_agent which handles tool binding internally
-    # Note: System message is added via prepare_messages function
-    agent = create_react_agent(llm, tools)
+    # 4. Create the simple agent
+    agent = SimpleScientificAgent(llm, tools_dict)
     
     return agent
+
+def prepare_messages(messages):
+    """Prepare messages with system message if not already present."""
+    # Check if first message is already a SystemMessage
+    if messages and isinstance(messages[0], SystemMessage):
+        return messages
+    
+    # Add system message at the beginning
+    return [SystemMessage(content=SYSTEM_MESSAGE)] + messages
 
 
 def main() -> None:
