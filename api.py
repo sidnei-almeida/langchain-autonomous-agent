@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 import os
 from dotenv import load_dotenv
-from agent import create_scientific_agent
+from agent import create_scientific_agent, prepare_messages
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 # Load environment variables
@@ -159,8 +159,11 @@ async def query_agent(request: QueryRequest):
     try:
         agent = get_agent()
         
+        # Prepare messages with system message
+        agent_messages = prepare_messages([HumanMessage(content=request.question)])
+        
         # Invoke the agent with LangChain message objects
-        result = agent.invoke({"messages": [HumanMessage(content=request.question)]})
+        result = agent.invoke({"messages": agent_messages})
         messages = result.get("messages", [])
         
         # Extract the final answer
@@ -227,6 +230,9 @@ async def chat_with_agent(request: ChatRequest):
                 agent_messages.append(AIMessage(content=msg.content))
             elif msg.role == "system":
                 agent_messages.append(SystemMessage(content=msg.content))
+        
+        # Prepare messages with system message if not already present
+        agent_messages = prepare_messages(agent_messages)
         
         # Invoke the agent with full conversation history
         result = agent.invoke({"messages": agent_messages})

@@ -8,7 +8,7 @@ from langchain_community.tools import (
 )
 from langchain_community.utilities import WikipediaAPIWrapper, ArxivAPIWrapper
 from langgraph.prebuilt import create_react_agent
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool
 import math
 
@@ -62,6 +62,31 @@ def calculator(expression: str) -> str:
         return f"Calculation error: {str(e)}"
 
 
+# System message for the scientific agent
+SYSTEM_MESSAGE = (
+    "You are a professional scientist and experienced researcher with access to multiple "
+    "scientific research tools. Your mission is to provide accurate, well-founded, "
+    "and evidence-based answers.\n\n"
+    "You have access to the following tools:\n"
+    "- web_search: For up-to-date information, news, and recent events\n"
+    "- wikipedia: For detailed encyclopedic information and general concepts\n"
+    "- arxiv: For scientific articles, academic papers, and scientific literature\n"
+    "- calculator: For complex mathematical and scientific calculations\n\n"
+    "Whenever possible, use multiple sources to validate information. "
+    "Prioritize scientific articles from ArXiv for technical and scientific questions. "
+    "Use the calculator for any necessary calculations. "
+    "Be precise, cite your sources when relevant, and explain your reasoning clearly."
+)
+
+def prepare_messages(messages):
+    """Prepare messages with system message if not already present."""
+    # Check if first message is already a SystemMessage
+    if messages and isinstance(messages[0], SystemMessage):
+        return messages
+    
+    # Add system message at the beginning
+    return [SystemMessage(content=SYSTEM_MESSAGE)] + messages
+
 def create_scientific_agent():
     """Creates and returns a configured scientific agent."""
     # 1. Initial Configuration
@@ -111,22 +136,9 @@ def create_scientific_agent():
     tools = [web_search, wikipedia, arxiv, calc]
 
     # 4. Creating the Scientific Agent with LangGraph
-    system_message = (
-        "You are a professional scientist and experienced researcher with access to multiple "
-        "scientific research tools. Your mission is to provide accurate, well-founded, "
-        "and evidence-based answers.\n\n"
-        "You have access to the following tools:\n"
-        "- web_search: For up-to-date information, news, and recent events\n"
-        "- wikipedia: For detailed encyclopedic information and general concepts\n"
-        "- arxiv: For scientific articles, academic papers, and scientific literature\n"
-        "- calculator: For complex mathematical and scientific calculations\n\n"
-        "Whenever possible, use multiple sources to validate information. "
-        "Prioritize scientific articles from ArXiv for technical and scientific questions. "
-        "Use the calculator for any necessary calculations. "
-        "Be precise, cite your sources when relevant, and explain your reasoning clearly."
-    )
-    
-    agent = create_react_agent(llm, tools, state_modifier=system_message)
+    # Note: create_react_agent doesn't accept state_modifier parameter
+    # We'll add the system message to each conversation instead
+    agent = create_react_agent(llm, tools)
     
     return agent
 
@@ -168,7 +180,9 @@ def main() -> None:
     print("🤔 Processing...\n")
 
     try:
-        result = agent.invoke({"messages": [HumanMessage(content=question)]})
+        # Prepare messages with system message
+        agent_messages = prepare_messages([HumanMessage(content=question)])
+        result = agent.invoke({"messages": agent_messages})
         messages = result.get("messages", [])
         final_answer = next(
             (msg.content for msg in reversed(messages) if isinstance(msg, AIMessage)),
