@@ -173,20 +173,18 @@ async def query_agent(request: QueryRequest):
         )
         
         if not final_answer:
-            # Instead of raising an error, return a friendly response
+            # Instead of raising an error, return a funny, friendly response
             return QueryResponse(
                 answer=(
-                    "I apologize, but I wasn't able to generate a complete response to your question. "
-                    "As a scientific research agent, I specialize in answering questions about science, "
-                    "research, mathematics, and related topics. "
-                    "\n\n"
-                    "If your question was about something outside my scientific expertise, I may not "
-                    "be the best resource for that. However, I'm here to help with evidence-based answers "
-                    "using my research tools (ArXiv, Wikipedia, web search, and calculator). "
-                    "\n\n"
-                    "Could you please rephrase your question or ask something related to scientific research? "
-                    "I'm happy to help with questions about physics, chemistry, biology, mathematics, "
-                    "computer science, recent scientific discoveries, and more!"
+                    "Okay, so I'm scratching my head here because I couldn't quite nail down a complete "
+                    "answer for you. But hey, that's science for you - sometimes things don't work out perfectly!\n\n"
+                    "Here's the deal: I'm a scientific research agent, which means I'm your go-to guy for "
+                    "science, research, math, and all that nerdy stuff we love. If you're asking me about "
+                    "something that's way outside my wheelhouse, I might not be the best choice.\n\n"
+                    "But here's what I CAN do - I've got these amazing research tools (ArXiv, Wikipedia, "
+                    "web search, and a calculator that's probably doing calculus in its sleep). Ask me "
+                    "something science-related and let's see what kind of knowledge we can dig up together! "
+                    "Physics, chemistry, biology, math, computer science, recent discoveries - I'm all about it! 🔬"
                 ),
                 question=request.question,
                 tools_used=None,
@@ -226,14 +224,17 @@ async def query_agent(request: QueryRequest):
         print(f"Error processing query: {str(e)}")
         print(f"Traceback: {error_trace}")
         
-        # Return a friendly error response instead of crashing
+        # Return a friendly, funny error response instead of crashing
         return QueryResponse(
             answer=(
-                "I apologize, but I encountered an issue while processing your question. "
-                "As a scientific research agent, I specialize in answering questions about science, "
-                "research, mathematics, and related topics. Could you please rephrase your question "
-                "or ask something related to scientific research? I'm here to help with evidence-based "
-                "answers using my research tools."
+                "Alright, so here's the thing - I hit a little snag trying to process that question. "
+                "But don't worry, I'm still here and ready to help!\n\n"
+                "I'm a scientific research agent, which means I'm really good at science stuff - "
+                "physics, chemistry, math, research papers, all that good stuff. But if you're asking "
+                "me about something way outside my lane, I might not be your guy.\n\n"
+                "Try asking me something science-related and watch me work my magic with my research "
+                "tools. I've got ArXiv, Wikipedia, web search, and a calculator that's probably smarter "
+                "than most of us. Let's do this! 🔬✨"
             ),
             question=request.question,
             tools_used=None,
@@ -275,7 +276,7 @@ async def chat_with_agent(request: ChatRequest):
         )
         
         if not final_answer:
-            # Instead of raising an error, return a friendly response
+            # Instead of raising an error, return a funny, friendly response
             last_user_message = next(
                 (msg.content for msg in reversed(request.messages) if msg.role == "user"),
                 "your question"
@@ -285,17 +286,18 @@ async def chat_with_agent(request: ChatRequest):
                 message=ChatMessage(
                     role="assistant",
                     content=(
-                        "I apologize, but I wasn't able to generate a complete response to your question. "
-                        "As a scientific research agent, I specialize in answering questions about science, "
-                        "research, mathematics, and related topics. "
-                        "\n\n"
-                        "If your question was about something outside my scientific expertise, I may not "
-                        "be the best resource for that. However, I'm here to help with evidence-based answers "
-                        "using my research tools (ArXiv, Wikipedia, web search, and calculator). "
-                        "\n\n"
-                        "Could you please rephrase your question or ask something related to scientific research? "
-                        "I'm happy to help with questions about physics, chemistry, biology, mathematics, "
-                        "computer science, recent scientific discoveries, and more!"
+                        "Alright, so here's what happened - I couldn't quite put together a complete response "
+                        "for you. But don't worry, I'm not giving up on you!\n\n"
+                        "I'm a scientific research agent, which basically means I'm really good at the science "
+                        "stuff - physics, chemistry, biology, math, research papers, you name it. But if you're "
+                        "asking me about something that's way outside my expertise (like pop culture or random "
+                        "stuff), I might not be your best bet.\n\n"
+                        "Here's what I CAN do though - I've got these awesome research tools at my disposal: "
+                        "ArXiv for scientific papers, Wikipedia for deep dives, web search for current info, "
+                        "and a calculator that's probably solving equations in its dreams.\n\n"
+                        "Try asking me something science-related and let's see what kind of knowledge we can "
+                        "uncover together! Physics, chemistry, biology, math, computer science, recent "
+                        "discoveries - that's my jam! 🔬✨"
                     )
                 ),
                 tools_used=None
@@ -340,18 +342,18 @@ async def chat_with_agent(request: ChatRequest):
             message=ChatMessage(
                 role="assistant",
                 content=(
-                    "I apologize, but I encountered an issue while processing your question. "
-                    "As a scientific research agent, I specialize in answering questions about science, "
-                    "research, mathematics, and related topics. "
-                    "\n\n"
-                    "If your question was about something outside my scientific expertise (like pop culture, "
-                    "entertainment, or personal matters), I may not be the best resource for that. "
-                    "However, I'm here to help with evidence-based answers using my research tools "
-                    "(ArXiv, Wikipedia, web search, and calculator). "
-                    "\n\n"
-                    "Could you please rephrase your question or ask something related to scientific research? "
-                    "I'm happy to help with questions about physics, chemistry, biology, mathematics, "
-                    "computer science, recent scientific discoveries, and more!"
+                    "Okay, so I hit a little bump in the road trying to process that question. "
+                    "But hey, that's life - sometimes things don't go exactly as planned!\n\n"
+                    "Here's the deal: I'm a scientific research agent, which means I'm really good "
+                    "at the science stuff - physics, chemistry, biology, math, research papers, all "
+                    "that good stuff. But if you're asking me about something way outside my lane "
+                    "(like pop culture, entertainment, or random life stuff), I might not be your guy.\n\n"
+                    "But here's what I CAN do - I've got these amazing research tools: ArXiv for "
+                    "scientific papers, Wikipedia for deep knowledge, web search for current info, "
+                    "and a calculator that's probably doing math in its sleep.\n\n"
+                    "Try asking me something science-related and let's see what kind of knowledge we "
+                    "can dig up together! Physics, chemistry, biology, math, computer science, recent "
+                    "discoveries - that's where I shine! 🔬✨"
                 )
             ),
             tools_used=None
