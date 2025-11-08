@@ -66,6 +66,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     message: ChatMessage = Field(..., description="The assistant's response message")
     tools_used: Optional[List[str]] = Field(default=None, description="List of tools used")
+    processing_time: Optional[float] = Field(default=None, description="Processing time in seconds")
 
 class HealthResponse(BaseModel):
     status: str = Field(..., description="API status")
@@ -249,6 +250,9 @@ async def chat_with_agent(request: ChatRequest):
     This endpoint supports multi-turn conversations by maintaining context
     through the message history.
     """
+    import time
+    start_time = time.time()
+    
     try:
         agent = get_agent()
         
@@ -295,7 +299,8 @@ async def chat_with_agent(request: ChatRequest):
                         "discoveries - that's my jam! 🔬✨"
                     )
                 ),
-                tools_used=None
+                tools_used=None,
+                processing_time=round(time.time() - start_time, 2)
             )
         
         # Extract tools used
@@ -312,9 +317,12 @@ async def chat_with_agent(request: ChatRequest):
         # Remove duplicates and clean up
         tools_used = list(set(tools_used)) if tools_used else None
         
+        processing_time = time.time() - start_time
+        
         return ChatResponse(
             message=ChatMessage(role="assistant", content=final_answer),
-            tools_used=tools_used
+            tools_used=tools_used,
+            processing_time=round(processing_time, 2)
         )
         
     except HTTPException:
@@ -351,7 +359,8 @@ async def chat_with_agent(request: ChatRequest):
                     "discoveries - that's where I shine! 🔬✨"
                 )
             ),
-            tools_used=None
+            tools_used=None,
+            processing_time=round(time.time() - start_time, 2)
         )
 
 if __name__ == "__main__":
