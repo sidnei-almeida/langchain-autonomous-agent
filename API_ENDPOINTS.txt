@@ -1,0 +1,241 @@
+================================================================================
+SCIENTIFIC RESEARCH AGENT API - ENDPOINTS FOR FRONTEND TEAM
+================================================================================
+
+BASE URL:
+https://salmeida-my-scientific-agent.hf.space
+
+INTERACTIVE DOCUMENTATION:
+https://salmeida-my-scientific-agent.hf.space/docs
+
+================================================================================
+ENDPOINTS
+================================================================================
+
+1. ROOT - API Information
+   GET /
+   Returns basic API information and available endpoints
+   
+   Example Response:
+   {
+     "name": "Scientific Research Agent API",
+     "version": "1.0.0",
+     "description": "An autonomous AI agent specialized in scientific research",
+     "endpoints": {
+       "health": "/health",
+       "query": "/api/query",
+       "chat": "/api/chat",
+       "tools": "/api/tools",
+       "docs": "/docs"
+     }
+   }
+
+
+2. HEALTH CHECK
+   GET /health
+   Check API health status and agent initialization
+   
+   Example Response:
+   {
+     "status": "healthy",
+     "agent_initialized": true,
+     "available_tools": [
+       "Web Search (DuckDuckGo)",
+       "Wikipedia",
+       "ArXiv",
+       "Scientific Calculator"
+     ]
+   }
+
+
+3. GET AVAILABLE TOOLS
+   GET /api/tools
+   Get list of all available tools with descriptions
+   
+   Example Response:
+   {
+     "tools": [
+       {
+         "name": "Web Search",
+         "provider": "DuckDuckGo",
+         "description": "Searches for up-to-date information on the internet..."
+       },
+       {
+         "name": "Wikipedia",
+         "provider": "Wikipedia API",
+         "description": "Searches for detailed and encyclopedic information..."
+       },
+       {
+         "name": "ArXiv",
+         "provider": "ArXiv API",
+         "description": "Searches and retrieves scientific articles..."
+       },
+       {
+         "name": "Scientific Calculator",
+         "provider": "Custom",
+         "description": "Performs complex mathematical calculations..."
+       }
+     ]
+   }
+
+
+4. QUERY AGENT (Single Question)
+   POST /api/query
+   Query the agent with a single question. Best for one-off queries.
+   
+   Request Headers:
+   Content-Type: application/json
+   
+   Request Body:
+   {
+     "question": "What are the latest advances in quantum computing?",
+     "include_history": false
+   }
+   
+   Response:
+   {
+     "answer": "According to recent research on ArXiv...",
+     "question": "What are the latest advances in quantum computing?",
+     "tools_used": ["arxiv", "wikipedia"],
+     "processing_time": 12.45
+   }
+   
+   Example cURL:
+   curl -X POST "https://salmeida-my-scientific-agent.hf.space/api/query" \
+     -H "Content-Type: application/json" \
+     -d '{"question": "What are the latest advances in quantum computing?"}'
+
+
+5. CHAT WITH AGENT (Multi-turn Conversation)
+   POST /api/chat
+   Chat with the agent using conversation history. Best for multi-turn conversations.
+   
+   Request Headers:
+   Content-Type: application/json
+   
+   Request Body:
+   {
+     "messages": [
+       {
+         "role": "user",
+         "content": "What is quantum entanglement?"
+       },
+       {
+         "role": "assistant",
+         "content": "Quantum entanglement is a phenomenon..."
+       },
+       {
+         "role": "user",
+         "content": "Can you give me an example?"
+       }
+     ]
+   }
+   
+   Response:
+   {
+     "message": {
+       "role": "assistant",
+       "content": "Sure! Here's an example of quantum entanglement..."
+     },
+     "tools_used": ["wikipedia", "calculator"]
+   }
+   
+   Example cURL:
+   curl -X POST "https://salmeida-my-scientific-agent.hf.space/api/chat" \
+     -H "Content-Type: application/json" \
+     -d '{"messages": [{"role": "user", "content": "What is quantum entanglement?"}]}'
+
+
+================================================================================
+ERROR RESPONSES
+================================================================================
+
+400 Bad Request:
+{
+  "detail": "Validation error message"
+}
+
+500 Internal Server Error:
+{
+  "detail": "Error processing query: error message"
+}
+
+
+================================================================================
+EXAMPLE USAGE - JavaScript/Fetch
+================================================================================
+
+// Single Query
+const response = await fetch('https://salmeida-my-scientific-agent.hf.space/api/query', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    question: 'What is machine learning?'
+  })
+});
+
+const data = await response.json();
+console.log(data);
+
+
+// Chat Conversation
+const chatResponse = await fetch('https://salmeida-my-scientific-agent.hf.space/api/chat', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    messages: [
+      { role: 'user', content: 'Explain quantum computing' }
+    ]
+  })
+});
+
+const chatData = await chatResponse.json();
+console.log(chatData);
+
+
+================================================================================
+EXAMPLE USAGE - Axios
+================================================================================
+
+import axios from 'axios';
+
+// Single Query
+const response = await axios.post(
+  'https://salmeida-my-scientific-agent.hf.space/api/query',
+  {
+    question: 'What is machine learning?'
+  }
+);
+console.log(response.data);
+
+
+// Chat Conversation
+const chatResponse = await axios.post(
+  'https://salmeida-my-scientific-agent.hf.space/api/chat',
+  {
+    messages: [
+      { role: 'user', content: 'Explain quantum computing' }
+    ]
+  }
+);
+console.log(chatResponse.data);
+
+
+================================================================================
+NOTES
+================================================================================
+
+- All endpoints accept and return JSON
+- No authentication required currently
+- CORS is enabled for all origins
+- Processing time may vary (typically 10-30 seconds)
+- For interactive testing, visit: https://salmeida-my-scientific-agent.hf.space/docs
+- The /docs endpoint provides Swagger UI for testing all endpoints
+- The /redoc endpoint provides ReDoc documentation
+
+================================================================================
+
