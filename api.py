@@ -173,9 +173,24 @@ async def query_agent(request: QueryRequest):
         )
         
         if not final_answer:
-            raise HTTPException(
-                status_code=500,
-                detail="Agent failed to generate a response"
+            # Instead of raising an error, return a friendly response
+            return QueryResponse(
+                answer=(
+                    "I apologize, but I wasn't able to generate a complete response to your question. "
+                    "As a scientific research agent, I specialize in answering questions about science, "
+                    "research, mathematics, and related topics. "
+                    "\n\n"
+                    "If your question was about something outside my scientific expertise, I may not "
+                    "be the best resource for that. However, I'm here to help with evidence-based answers "
+                    "using my research tools (ArXiv, Wikipedia, web search, and calculator). "
+                    "\n\n"
+                    "Could you please rephrase your question or ask something related to scientific research? "
+                    "I'm happy to help with questions about physics, chemistry, biology, mathematics, "
+                    "computer science, recent scientific discoveries, and more!"
+                ),
+                question=request.question,
+                tools_used=None,
+                processing_time=round(time.time() - start_time, 2)
             )
         
         # Extract tools used (if available in the result)
@@ -205,9 +220,24 @@ async def query_agent(request: QueryRequest):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error processing query: {str(e)}"
+        # Log the error for debugging
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error processing query: {str(e)}")
+        print(f"Traceback: {error_trace}")
+        
+        # Return a friendly error response instead of crashing
+        return QueryResponse(
+            answer=(
+                "I apologize, but I encountered an issue while processing your question. "
+                "As a scientific research agent, I specialize in answering questions about science, "
+                "research, mathematics, and related topics. Could you please rephrase your question "
+                "or ask something related to scientific research? I'm here to help with evidence-based "
+                "answers using my research tools."
+            ),
+            question=request.question,
+            tools_used=None,
+            processing_time=round(time.time() - start_time, 2)
         )
 
 @app.post("/api/chat", response_model=ChatResponse, tags=["Agent"])
@@ -245,9 +275,30 @@ async def chat_with_agent(request: ChatRequest):
         )
         
         if not final_answer:
-            raise HTTPException(
-                status_code=500,
-                detail="Agent failed to generate a response"
+            # Instead of raising an error, return a friendly response
+            last_user_message = next(
+                (msg.content for msg in reversed(request.messages) if msg.role == "user"),
+                "your question"
+            )
+            
+            return ChatResponse(
+                message=ChatMessage(
+                    role="assistant",
+                    content=(
+                        "I apologize, but I wasn't able to generate a complete response to your question. "
+                        "As a scientific research agent, I specialize in answering questions about science, "
+                        "research, mathematics, and related topics. "
+                        "\n\n"
+                        "If your question was about something outside my scientific expertise, I may not "
+                        "be the best resource for that. However, I'm here to help with evidence-based answers "
+                        "using my research tools (ArXiv, Wikipedia, web search, and calculator). "
+                        "\n\n"
+                        "Could you please rephrase your question or ask something related to scientific research? "
+                        "I'm happy to help with questions about physics, chemistry, biology, mathematics, "
+                        "computer science, recent scientific discoveries, and more!"
+                    )
+                ),
+                tools_used=None
             )
         
         # Extract tools used
@@ -272,9 +323,38 @@ async def chat_with_agent(request: ChatRequest):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error processing chat: {str(e)}"
+        # Log the error for debugging
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error processing chat: {str(e)}")
+        print(f"Traceback: {error_trace}")
+        
+        # Return a friendly error response instead of crashing
+        # Get the last user message for context
+        last_user_message = next(
+            (msg.content for msg in reversed(request.messages) if msg.role == "user"),
+            "your question"
+        )
+        
+        return ChatResponse(
+            message=ChatMessage(
+                role="assistant",
+                content=(
+                    "I apologize, but I encountered an issue while processing your question. "
+                    "As a scientific research agent, I specialize in answering questions about science, "
+                    "research, mathematics, and related topics. "
+                    "\n\n"
+                    "If your question was about something outside my scientific expertise (like pop culture, "
+                    "entertainment, or personal matters), I may not be the best resource for that. "
+                    "However, I'm here to help with evidence-based answers using my research tools "
+                    "(ArXiv, Wikipedia, web search, and calculator). "
+                    "\n\n"
+                    "Could you please rephrase your question or ask something related to scientific research? "
+                    "I'm happy to help with questions about physics, chemistry, biology, mathematics, "
+                    "computer science, recent scientific discoveries, and more!"
+                )
+            ),
+            tools_used=None
         )
 
 if __name__ == "__main__":
