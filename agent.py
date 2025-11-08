@@ -6,8 +6,7 @@ from langchain_community.tools import (
     WikipediaQueryRun,
 )
 from langchain_community.utilities import WikipediaAPIWrapper
-from langchain.agents import AgentExecutor, create_tool_calling_agent
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool
 import math
@@ -287,28 +286,12 @@ def create_scientific_agent():
     # List of all tools - ensure they have proper names
     tools = [web_search, wikipedia, arxiv_tool, calc]
 
-    # 4. Creating the Scientific Agent using traditional LangChain AgentExecutor
-    # This approach works better with Groq than LangGraph's create_react_agent
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", SYSTEM_MESSAGE),
-        MessagesPlaceholder(variable_name="chat_history"),
-        ("human", "{input}"),
-        MessagesPlaceholder(variable_name="agent_scratchpad"),
-    ])
+    # 4. Creating the Scientific Agent with LangGraph
+    # Using create_react_agent which handles tool binding internally
+    # Note: System message is added via prepare_messages function
+    agent = create_react_agent(llm, tools)
     
-    # Create the agent using traditional LangChain method (tool calling agent)
-    agent = create_tool_calling_agent(llm, tools, prompt)
-    
-    # Wrap in AgentExecutor for execution
-    agent_executor = AgentExecutor(
-        agent=agent,
-        tools=tools,
-        verbose=True,
-        handle_parsing_errors=True,
-        max_iterations=15
-    )
-    
-    return agent_executor
+    return agent
 
 
 def main() -> None:
@@ -348,12 +331,14 @@ def main() -> None:
     print("🤔 Processing...\n")
 
     try:
-        # AgentExecutor uses format: {"input": str, "chat_history": list}
-        result = agent.invoke({
-            "input": question,
-            "chat_history": []
-        })
-        final_answer = result.get("output", "")
+        # Prepare messages with system message
+        agent_messages = prepare_messages([HumanMessage(content=question)])
+        result = agent.invoke({"messages": agent_messages})
+        messages = result.get("messages", [])
+        final_answer = next(
+            (msg.content for msg in reversed(messages) if isinstance(msg, AIMessage)),
+            None,
+        )
 
         print("\n" + "="*60)
         print("📊 FINAL ANSWER")
