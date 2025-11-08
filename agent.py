@@ -7,8 +7,8 @@ from langchain_community.tools import (
     ArxivQueryRun,
 )
 from langchain_community.utilities import WikipediaAPIWrapper, ArxivAPIWrapper
-from langchain.agents import create_agent
-from langchain_core.messages import AIMessage
+from langgraph.prebuilt import create_react_agent
+from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.tools import tool
 import math
 
@@ -110,25 +110,23 @@ def create_scientific_agent():
     # List of all tools
     tools = [web_search, wikipedia, arxiv, calc]
 
-    # 4. Creating the Scientific Agent with the new API (LangChain >= 1.0)
-    agent = create_agent(
-        llm,
-        tools,
-        system_prompt=(
-            "You are a professional scientist and experienced researcher with access to multiple "
-            "scientific research tools. Your mission is to provide accurate, well-founded, "
-            "and evidence-based answers.\n\n"
-            "You have access to the following tools:\n"
-            "- Web Search: For up-to-date information, news, and recent events\n"
-            "- Wikipedia: For detailed encyclopedic information and general concepts\n"
-            "- ArXiv: For scientific articles, academic papers, and scientific literature\n"
-            "- Calculator: For complex mathematical and scientific calculations\n\n"
-            "Whenever possible, use multiple sources to validate information. "
-            "Prioritize scientific articles from ArXiv for technical and scientific questions. "
-            "Use the calculator for any necessary calculations. "
-            "Be precise, cite your sources when relevant, and explain your reasoning."
-        ),
+    # 4. Creating the Scientific Agent with LangGraph
+    system_message = (
+        "You are a professional scientist and experienced researcher with access to multiple "
+        "scientific research tools. Your mission is to provide accurate, well-founded, "
+        "and evidence-based answers.\n\n"
+        "You have access to the following tools:\n"
+        "- web_search: For up-to-date information, news, and recent events\n"
+        "- wikipedia: For detailed encyclopedic information and general concepts\n"
+        "- arxiv: For scientific articles, academic papers, and scientific literature\n"
+        "- calculator: For complex mathematical and scientific calculations\n\n"
+        "Whenever possible, use multiple sources to validate information. "
+        "Prioritize scientific articles from ArXiv for technical and scientific questions. "
+        "Use the calculator for any necessary calculations. "
+        "Be precise, cite your sources when relevant, and explain your reasoning clearly."
     )
+    
+    agent = create_react_agent(llm, tools, state_modifier=system_message)
     
     return agent
 
@@ -170,7 +168,7 @@ def main() -> None:
     print("🤔 Processing...\n")
 
     try:
-        result = agent.invoke({"messages": [{"role": "user", "content": question}]})
+        result = agent.invoke({"messages": [HumanMessage(content=question)]})
         messages = result.get("messages", [])
         final_answer = next(
             (msg.content for msg in reversed(messages) if isinstance(msg, AIMessage)),

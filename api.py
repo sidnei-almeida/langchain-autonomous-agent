@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any
 import os
 from dotenv import load_dotenv
 from agent import create_scientific_agent
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 # Load environment variables
 load_dotenv()
@@ -159,8 +159,8 @@ async def query_agent(request: QueryRequest):
     try:
         agent = get_agent()
         
-        # Invoke the agent
-        result = agent.invoke({"messages": [{"role": "user", "content": request.question}]})
+        # Invoke the agent with LangChain message objects
+        result = agent.invoke({"messages": [HumanMessage(content=request.question)]})
         messages = result.get("messages", [])
         
         # Extract the final answer
@@ -176,15 +176,19 @@ async def query_agent(request: QueryRequest):
             )
         
         # Extract tools used (if available in the result)
-        tools_used = None
+        tools_used = []
         if "messages" in result:
             # Check for tool messages
-            tool_calls = []
             for msg in messages:
-                if hasattr(msg, 'tool_calls') and msg.tool_calls:
-                    tool_calls.extend([tc.get('name', 'unknown') for tc in msg.tool_calls])
-            if tool_calls:
-                tools_used = list(set(tool_calls))
+                if hasattr(msg, 'name') and msg.name:
+                    # This is a tool message
+                    tools_used.append(msg.name)
+                elif hasattr(msg, 'tool_calls') and msg.tool_calls:
+                    # This is an AI message with tool calls
+                    tools_used.extend([tc.get('name', 'unknown') for tc in msg.tool_calls])
+        
+        # Remove duplicates and clean up
+        tools_used = list(set(tools_used)) if tools_used else None
         
         processing_time = time.time() - start_time
         
@@ -214,19 +218,21 @@ async def chat_with_agent(request: ChatRequest):
     try:
         agent = get_agent()
         
-        # Convert messages to the format expected by the agent
+        # Convert messages to LangChain message objects
         agent_messages = []
         for msg in request.messages:
-            agent_messages.append({
-                "role": msg.role,
-                "content": msg.content
-            })
+            if msg.role == "user":
+                agent_messages.append(HumanMessage(content=msg.content))
+            elif msg.role == "assistant":
+                agent_messages.append(AIMessage(content=msg.content))
+            elif msg.role == "system":
+                agent_messages.append(SystemMessage(content=msg.content))
         
         # Invoke the agent with full conversation history
         result = agent.invoke({"messages": agent_messages})
         messages = result.get("messages", [])
         
-        # Extract the final answer
+        # Extract the final answer (last AI message)
         final_answer = next(
             (msg.content for msg in reversed(messages) if isinstance(msg, AIMessage)),
             None,
@@ -239,14 +245,18 @@ async def chat_with_agent(request: ChatRequest):
             )
         
         # Extract tools used
-        tools_used = None
+        tools_used = []
         if "messages" in result:
-            tool_calls = []
             for msg in messages:
-                if hasattr(msg, 'tool_calls') and msg.tool_calls:
-                    tool_calls.extend([tc.get('name', 'unknown') for tc in msg.tool_calls])
-            if tool_calls:
-                tools_used = list(set(tool_calls))
+                if hasattr(msg, 'name') and msg.name:
+                    # This is a tool message
+                    tools_used.append(msg.name)
+                elif hasattr(msg, 'tool_calls') and msg.tool_calls:
+                    # This is an AI message with tool calls
+                    tools_used.extend([tc.get('name', 'unknown') for tc in msg.tool_calls])
+        
+        # Remove duplicates and clean up
+        tools_used = list(set(tools_used)) if tools_used else None
         
         return ChatResponse(
             message=ChatMessage(role="assistant", content=final_answer),
