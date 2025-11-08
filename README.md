@@ -1,3 +1,15 @@
+---
+title: Scientific Research Agent
+emoji: 🔬
+colorFrom: purple
+colorTo: blue
+sdk: gradio
+sdk_version: "4.44.1"
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # 🔬 Scientific Research Agent
 
 An autonomous AI agent specialized in scientific research that uses multiple tools to provide accurate, evidence-based answers. Built with LangChain, Groq (Llama 3), and scientific research tools.
