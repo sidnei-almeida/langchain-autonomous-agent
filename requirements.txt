@@ -6,4 +6,5 @@ ddgs
 python-dotenv
 wikipedia
 arxiv
-gradio
+gradio==4.44.1
+huggingface_hub==0.20.2

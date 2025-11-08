@@ -91,37 +91,34 @@ with gr.Blocks(title="🔬 Scientific Research Agent", theme=gr.themes.Soft()) a
         """
     )
     
+    chatbot = gr.Chatbot(
+        label="Scientific Agent",
+        height=500,
+        show_copy_button=True,
+    )
+    
     with gr.Row():
-        with gr.Column(scale=1):
-            gr.Markdown("### 💡 Example Questions")
-            examples = gr.Examples(
-                examples=[
-                    "What are the latest advances in quantum computing according to ArXiv?",
-                    "Explain the concept of entropy using Wikipedia and calculate some examples",
-                    "What are the recent discoveries about CRISPR?",
-                    "Calculate sin(pi/2) + cos(0) + sqrt(16)",
-                    "Find recent papers on machine learning from ArXiv",
-                ],
-                inputs=None,
-            )
-        
-        with gr.Column(scale=2):
-            chatbot = gr.Chatbot(
-                label="Scientific Agent",
-                height=500,
-                show_copy_button=True,
-            )
-            
-            with gr.Row():
-                msg = gr.Textbox(
-                    label="Your Question",
-                    placeholder="Ask your scientific question here...",
-                    scale=4,
-                    lines=2,
-                )
-                submit_btn = gr.Button("Ask 🔬", scale=1, variant="primary")
-            
-            clear_btn = gr.Button("Clear Chat", variant="secondary")
+        msg = gr.Textbox(
+            label="Your Question",
+            placeholder="Ask your scientific question here...",
+            scale=4,
+            lines=2,
+        )
+        submit_btn = gr.Button("Ask 🔬", scale=1, variant="primary")
+    
+    clear_btn = gr.Button("Clear Chat", variant="secondary")
+    
+    # Example questions
+    gr.Examples(
+        examples=[
+            "What are the latest advances in quantum computing according to ArXiv?",
+            "Explain the concept of entropy using Wikipedia and calculate some examples",
+            "What are the recent discoveries about CRISPR?",
+            "Calculate sin(pi/2) + cos(0) + sqrt(16)",
+            "Find recent papers on machine learning from ArXiv",
+        ],
+        inputs=msg,
+    )
     
     # Event handlers
     msg.submit(query_agent, [msg, chatbot], [chatbot]).then(
