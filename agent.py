@@ -4,13 +4,13 @@ from langchain_groq import ChatGroq
 from langchain_community.tools import (
     DuckDuckGoSearchRun,
     WikipediaQueryRun,
-    ArxivQueryRun,
 )
-from langchain_community.utilities import WikipediaAPIWrapper, ArxivAPIWrapper
+from langchain_community.utilities import WikipediaAPIWrapper
 from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool
 import math
+import arxiv
 
 # Scientific Calculator Tool
 @tool
@@ -62,6 +62,90 @@ def calculator(expression: str) -> str:
         return f"Calculation error: {str(e)}"
 
 
+# ArXiv Search Tool with URLs
+@tool
+def search_scientific_papers(query: str) -> str:
+    """
+    Search for scientific papers on ArXiv that discuss or affirm specific topics or claims.
+    Returns detailed information including title, authors, abstract, publication date, and URLs.
+    
+    Use this tool when users ask to:
+    - Find research papers about a topic (e.g., "find research about quantum computing")
+    - Find studies that say/affirm something (e.g., "find research that says X is Y")
+    - Search for academic papers on any scientific subject
+    - Get papers that discuss or support a specific claim
+    
+    Args:
+        query: The topic or claim to search for. Convert user claims into search queries.
+               Examples: "cats size dogs" for "cats are smaller than dogs"
+                        "meditation stress reduction" for "meditation reduces stress"
+    
+    Returns:
+        Formatted string with complete paper details including title, authors, abstract, 
+        publication date, ArXiv URL, PDF URL, and categories
+    """
+    try:
+        # Create ArXiv client
+        client = arxiv.Client()
+        
+        # Search for papers
+        search = arxiv.Search(
+            query=query,
+            max_results=5,  # Get top 5 most relevant papers
+            sort_by=arxiv.SortCriterion.Relevance
+        )
+        
+        # Collect paper information
+        papers_info = []
+        for result in client.results(search):
+            # Format authors
+            authors_list = [author.name for author in result.authors]
+            if len(authors_list) > 3:
+                authors_str = ", ".join(authors_list[:3]) + f" et al. ({len(authors_list)} total authors)"
+            else:
+                authors_str = ", ".join(authors_list)
+            
+            # Format publication date
+            pub_date = result.published.strftime("%B %d, %Y")
+            
+            # Get abstract (first 500 chars for summary)
+            abstract = result.summary.replace('\n', ' ').strip()
+            abstract_short = abstract[:500] + "..." if len(abstract) > 500 else abstract
+            
+            # Format paper information
+            paper_info = f"""
+═══════════════════════════════════════════════════════════════
+📄 PAPER FOUND:
+
+📌 Title: {result.title}
+
+👥 Authors: {authors_str}
+
+📅 Published: {pub_date}
+
+📝 Abstract:
+{abstract_short}
+
+🔗 ArXiv URL: {result.entry_id}
+
+📥 PDF Download: {result.pdf_url}
+
+🏷️ Categories: {', '.join(result.categories)}
+═══════════════════════════════════════════════════════════════
+"""
+            papers_info.append(paper_info)
+        
+        if not papers_info:
+            return f"No papers found for query: '{query}'. Try different search terms or related topics."
+        
+        # Return formatted results
+        header = f"🔬 Found {len(papers_info)} relevant scientific papers for: '{query}'\n\n"
+        return header + "\n".join(papers_info)
+        
+    except Exception as e:
+        return f"Error searching ArXiv: {str(e)}. Please try a different query or check your internet connection."
+
+
 # System message for the scientific agent
 SYSTEM_MESSAGE = (
     "You are a brilliant scientist and researcher with a sharp sense of humor and a talent for "
@@ -98,26 +182,30 @@ SYSTEM_MESSAGE = (
     "You have access to the following tools:\n"
     "- web_search: For up-to-date information, news, and recent events\n"
     "- wikipedia: For detailed encyclopedic information and general concepts\n"
-    "- arxiv: For scientific articles, academic papers, and scientific literature - THIS IS YOUR RESEARCH FINDER!\n"
+    "- search_scientific_papers: For finding scientific articles on ArXiv - THIS IS YOUR RESEARCH FINDER! "
+    "Returns complete paper info with URLs!\n"
     "- calculator: For complex mathematical and scientific calculations\n\n"
     "RESEARCH SEARCH GUIDELINES (Keep it funny!):\n"
     "- When users ask to 'find research about X', 'find studies on Y', 'find papers that say X is Y', "
-    "or 'find a research that proves Z' - IMMEDIATELY use the arxiv tool with enthusiasm!\n"
-    "- Search queries should be specific and scientific (e.g., 'machine learning in healthcare', "
-    "'climate change effects on biodiversity', 'quantum computing algorithms')\n"
-    "- When presenting research papers, always include with your signature humor:\n"
-    "  * Paper title (make it sound interesting!)\n"
-    "  * Authors (give them props)\n"
-    "  * Key findings or abstract summary (explain it like you're telling a friend)\n"
-    "  * Publication year and details\n"
-    "  * Link to the paper if available\n"
-    "- If multiple papers are found, highlight the 2-3 most relevant ones and joke about how "
-    "scientists are really productive\n"
-    "- Add your humor while explaining the research - make finding papers entertaining!\n"
-    "- If no papers are found, suggest alternative search terms with humor (e.g., 'Looks like "
-    "scientists haven't figured that one out yet, but here's what we can try...')\n"
+    "'find research that affirms Z' - IMMEDIATELY use search_scientific_papers tool!\n"
+    "- Convert user claims into search queries:\n"
+    "  * 'find research that says cats are smaller than dogs' -> search_scientific_papers('cats dogs size comparison')\n"
+    "  * 'find papers that affirm meditation reduces stress' -> search_scientific_papers('meditation stress reduction')\n"
+    "  * 'find research about quantum computing' -> search_scientific_papers('quantum computing')\n"
+    "- The tool returns papers with ALL details: title, authors, abstract, date, ArXiv URL, PDF URL, categories\n"
+    "- When presenting research papers:\n"
+    "  * Keep the formatted structure from the tool (it's already nicely formatted with emojis)\n"
+    "  * Add your comedic commentary BEFORE or AFTER the paper details\n"
+    "  * Make URLs clickable in your response by keeping them as-is\n"
+    "  * Highlight the most relevant papers if multiple are found\n"
+    "  * Make jokes about the research, but always respect the science\n"
+    "- Present URLs clearly: 'You can read the full paper here: [URL]' or 'PDF available at: [URL]'\n"
+    "- If multiple papers are found, joke about how productive scientists are!\n"
+    "- If no papers are found, use humor to suggest why or offer alternative search terms\n"
     "- When someone asks 'find research that says X is Y', search for papers on that topic and "
-    "present findings with your comedic flair\n\n"
+    "present findings with your signature comedic style\n"
+    "- If the claim is non-scientific (like personal stuff), use humor to explain that ArXiv doesn't "
+    "have papers on that, but you can search for related scientific topics\n\n"
     "IMPORTANT GUIDELINES:\n"
     "- ALWAYS provide a response, even if you cannot find specific information - make it funny and helpful\n"
     "- Sprinkle jokes and witty observations throughout your answers naturally\n"
@@ -180,28 +268,14 @@ def create_scientific_agent():
         description="Searches for detailed and encyclopedic information on Wikipedia. Ideal for concepts, biographies, historical events, and in-depth explanations."
     )
     
-    # ArXiv (Scientific Articles)
-    arxiv_api = ArxivAPIWrapper()
-    arxiv = ArxivQueryRun(
-        api_wrapper=arxiv_api,
-        name="arxiv",
-        description=(
-            "Searches and retrieves scientific articles from ArXiv. "
-            "Use this tool when users ask to: "
-            "- Find research papers about a specific topic (e.g., 'find research about quantum computing') "
-            "- Find studies that prove or discuss something (e.g., 'find research that says X is Y') "
-            "- Search for academic papers on any scientific subject "
-            "- Get recent scientific publications on a topic "
-            "Always provide the paper titles, authors, abstracts, and links when available. "
-            "This is your go-to tool for finding actual scientific research papers."
-        )
-    )
+    # ArXiv (Scientific Articles) - Custom tool with full URLs and details
+    arxiv_tool = search_scientific_papers
     
     # Scientific Calculator
     calc = calculator
     
     # List of all tools
-    tools = [web_search, wikipedia, arxiv, calc]
+    tools = [web_search, wikipedia, arxiv_tool, calc]
 
     # 4. Creating the Scientific Agent with LangGraph
     # Note: create_react_agent doesn't accept state_modifier parameter
