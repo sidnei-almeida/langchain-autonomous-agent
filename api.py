@@ -6,6 +6,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 import os
+import json
+import re
+import shutil
+from pathlib import Path
 from dotenv import load_dotenv
 from agent import create_scientific_agent, prepare_messages
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -54,11 +58,23 @@ class ChatMessage(BaseModel):
     role: str = Field(..., description="Message role: 'user' or 'assistant'")
     content: str = Field(..., description="Message content")
 
+class StructuredSection(BaseModel):
+    title: str = Field(..., description="Section title")
+    content: str = Field(..., description="Section content")
+    
+class StructuredResponse(BaseModel):
+    summary: Optional[str] = Field(default=None, description="Brief summary of the answer")
+    main_points: Optional[List[str]] = Field(default=None, description="List of main points")
+    sections: Optional[List[StructuredSection]] = Field(default=None, description="Organized sections")
+    key_findings: Optional[List[str]] = Field(default=None, description="Key findings or conclusions")
+    references: Optional[List[str]] = Field(default=None, description="References or sources mentioned")
+
 class QueryResponse(BaseModel):
     answer: str = Field(..., description="The agent's answer")
     question: str = Field(..., description="The original question")
     tools_used: Optional[List[str]] = Field(default=None, description="List of tools used by the agent")
     processing_time: Optional[float] = Field(default=None, description="Processing time in seconds")
+    structured: Optional[StructuredResponse] = Field(default=None, description="Structured response data for frontend organization")
 
 class ChatRequest(BaseModel):
     messages: List[ChatMessage] = Field(..., description="List of chat messages")
@@ -67,11 +83,95 @@ class ChatResponse(BaseModel):
     message: ChatMessage = Field(..., description="The assistant's response message")
     tools_used: Optional[List[str]] = Field(default=None, description="List of tools used")
     processing_time: Optional[float] = Field(default=None, description="Processing time in seconds")
+    structured: Optional[StructuredResponse] = Field(default=None, description="Structured response data for frontend organization")
 
 class HealthResponse(BaseModel):
     status: str = Field(..., description="API status")
     agent_initialized: bool = Field(..., description="Whether the agent is initialized")
     available_tools: List[str] = Field(..., description="List of available tools")
+
+# Helper function to extract structured data from response
+def extract_structured_data(text: str) -> Optional[StructuredResponse]:
+    """
+    Extract structured information from the LLM response.
+    Tries to find JSON structure first, then falls back to parsing text patterns.
+    """
+    try:
+        # Try to find JSON structure in the response
+        json_match = re.search(r'\{[^{}]*"summary"[^{}]*\}', text, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(0)
+            try:
+                data = json.loads(json_str)
+                return StructuredResponse(**data)
+            except:
+                pass
+        
+        # Try to extract structured data from text patterns
+        structured = {}
+        
+        # Extract summary (first paragraph or explicit summary)
+        summary_match = re.search(r'(?:Summary|Overview|In summary)[:\s]+(.+?)(?:\n\n|\n[A-Z]|$)', text, re.IGNORECASE | re.DOTALL)
+        if summary_match:
+            structured['summary'] = summary_match.group(1).strip()
+        else:
+            # Fallback: use first paragraph if it's substantial
+            first_para = text.split('\n\n')[0].strip()
+            if len(first_para) > 50 and len(first_para) < 300:
+                structured['summary'] = first_para
+        
+        # Extract main points (bullet points or numbered lists)
+        points = []
+        # Look for bullet points
+        bullet_points = re.findall(r'(?:^|\n)[•\-\*]\s*(.+?)(?=\n|$)', text, re.MULTILINE)
+        # Look for numbered points
+        numbered_points = re.findall(r'(?:^|\n)\d+[\.\)]\s*(.+?)(?=\n|$)', text, re.MULTILINE)
+        points.extend(bullet_points)
+        points.extend(numbered_points)
+        if points:
+            structured['main_points'] = [p.strip() for p in points[:10]]  # Limit to 10 points
+        
+        # Extract sections (headers followed by content)
+        sections = []
+        # Look for headers (lines that are all caps or have specific patterns)
+        header_pattern = r'(?:^|\n)([A-Z][A-Z\s]{3,}?)(?:\n|:)(.+?)(?=\n[A-Z][A-Z\s]{3,}|$)'
+        section_matches = re.finditer(header_pattern, text, re.MULTILINE | re.DOTALL)
+        for match in section_matches:
+            title = match.group(1).strip()
+            content = match.group(2).strip()
+            if len(content) > 20:  # Only include substantial sections
+                sections.append({"title": title, "content": content})
+        if sections:
+            structured['sections'] = [StructuredSection(**s) for s in sections[:5]]  # Limit to 5 sections
+        
+        # Extract key findings
+        findings_pattern = r'(?:Key findings|Findings|Conclusions?)[:\s]+(.+?)(?=\n\n|\n[A-Z]|$)'
+        findings_match = re.search(findings_pattern, text, re.IGNORECASE | re.DOTALL)
+        if findings_match:
+            findings_text = findings_match.group(1)
+            findings_list = re.findall(r'[•\-\*]\s*(.+?)(?=\n|$)', findings_text)
+            if findings_list:
+                structured['key_findings'] = [f.strip() for f in findings_list[:5]]
+        
+        # Extract references (URLs or citation patterns)
+        references = []
+        # URLs
+        urls = re.findall(r'https?://[^\s]+', text)
+        references.extend(urls)
+        # ArXiv references
+        arxiv_refs = re.findall(r'arXiv[:\s]+([^\s,]+)', text, re.IGNORECASE)
+        references.extend(arxiv_refs)
+        if references:
+            structured['references'] = list(set(references))[:10]  # Remove duplicates, limit to 10
+        
+        # Only return if we extracted something meaningful
+        if structured:
+            return StructuredResponse(**structured)
+        
+    except Exception as e:
+        print(f"Error extracting structured data: {str(e)}")
+    
+    return None
 
 # Endpoints
 @app.get("/", tags=["General"])
@@ -198,13 +298,17 @@ async def query_agent(request: QueryRequest):
         # Remove duplicates and clean up
         tools_used = list(set(tools_used)) if tools_used else None
         
+        # Extract structured data from the response
+        structured_data = extract_structured_data(final_answer)
+        
         processing_time = time.time() - start_time
         
         return QueryResponse(
             answer=final_answer,
             question=request.question,
             tools_used=tools_used,
-            processing_time=round(processing_time, 2)
+            processing_time=round(processing_time, 2),
+            structured=structured_data
         )
         
     except HTTPException:
@@ -300,12 +404,16 @@ async def chat_with_agent(request: ChatRequest):
         # Remove duplicates and clean up
         tools_used = list(set(tools_used)) if tools_used else None
         
+        # Extract structured data from the response
+        structured_data = extract_structured_data(final_answer)
+        
         processing_time = time.time() - start_time
         
         return ChatResponse(
             message=ChatMessage(role="assistant", content=final_answer),
             tools_used=tools_used,
-            processing_time=round(processing_time, 2)
+            processing_time=round(processing_time, 2),
+            structured=structured_data
         )
         
     except HTTPException:

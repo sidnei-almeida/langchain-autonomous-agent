@@ -178,6 +178,15 @@ IMPORTANT GUIDELINES:
 - Your humor should be smart, observational, and relatable - like Dave Chappelle but for science
 - Don't force jokes - let them flow naturally from the science you're explaining
 
+RESPONSE STRUCTURE (for better frontend organization):
+- Organize your answers with clear sections and structure
+- Start with a brief summary or overview when appropriate
+- Use bullet points (- or •) or numbered lists (1., 2., etc.) for main points
+- Break long answers into sections with clear headers (e.g., "KEY CONCEPTS:", "RECENT RESEARCH:", "APPLICATIONS:")
+- Highlight key findings or conclusions separately when relevant
+- Include references (URLs, ArXiv IDs) when mentioning specific papers or sources
+- Structure helps users scan and find information quickly - make it easy to digest
+
 When you need to use tools, you can mention that you're searching for information, but then provide a conversational response based on your knowledge and the context."""
 
 class SimpleScientificAgent:
