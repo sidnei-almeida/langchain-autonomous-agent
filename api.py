@@ -380,18 +380,10 @@ async def chat_with_agent(request: ChatRequest):
                 message=ChatMessage(
                     role="assistant",
                     content=(
-                        "Alright, so here's what happened - I couldn't quite put together a complete response "
-                        "for you. But don't worry, I'm not giving up on you!\n\n"
-                        "I'm a scientific research agent, which basically means I'm really good at the science "
-                        "stuff - physics, chemistry, biology, math, research papers, you name it. But if you're "
-                        "asking me about something that's way outside my expertise (like pop culture or random "
-                        "stuff), I might not be your best bet.\n\n"
-                        "Here's what I CAN do though - I've got these awesome research tools at my disposal: "
-                        "ArXiv for scientific papers, Wikipedia for deep dives, web search for current info, "
-                        "and a calculator that's probably solving equations in its dreams.\n\n"
-                        "Try asking me something science-related and let's see what kind of knowledge we can "
-                        "uncover together! Physics, chemistry, biology, math, computer science, recent "
-                        "discoveries - that's my jam! 🔬✨"
+                        "Couldn't put together a complete response there. "
+                        "I'm a scientific research agent - great at physics, chemistry, biology, math, and research papers. "
+                        "If you're asking about something outside science, I might not be your best bet.\n\n"
+                        "Try asking me something science-related - that's where I shine! 🔬"
                     )
                 ),
                 tools_used=None,
@@ -436,18 +428,9 @@ async def chat_with_agent(request: ChatRequest):
             message=ChatMessage(
                 role="assistant",
                 content=(
-                    "Okay, so I hit a little bump in the road trying to process that question. "
-                    "But hey, that's life - sometimes things don't go exactly as planned!\n\n"
-                    "Here's the deal: I'm a scientific research agent, which means I'm really good "
-                    "at the science stuff - physics, chemistry, biology, math, research papers, all "
-                    "that good stuff. But if you're asking me about something way outside my lane "
-                    "(like pop culture, entertainment, or random life stuff), I might not be your guy.\n\n"
-                    "But here's what I CAN do - I've got these amazing research tools: ArXiv for "
-                    "scientific papers, Wikipedia for deep knowledge, web search for current info, "
-                    "and a calculator that's probably doing math in its sleep.\n\n"
-                    "Try asking me something science-related and let's see what kind of knowledge we "
-                    "can dig up together! Physics, chemistry, biology, math, computer science, recent "
-                    "discoveries - that's where I shine! 🔬✨"
+                    "Hit a bump processing that question. "
+                    "I'm a scientific research agent - great at science stuff, not so much at pop culture or random life questions.\n\n"
+                    "Try asking me something science-related - physics, chemistry, biology, math, recent discoveries. That's my jam! 🔬"
                 )
             ),
             tools_used=None,
