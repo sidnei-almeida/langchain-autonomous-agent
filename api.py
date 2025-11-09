@@ -58,16 +58,9 @@ class ChatMessage(BaseModel):
     role: str = Field(..., description="Message role: 'user' or 'assistant'")
     content: str = Field(..., description="Message content")
 
-class StructuredSection(BaseModel):
-    title: str = Field(..., description="Section title")
-    content: str = Field(..., description="Section content")
-    
 class StructuredResponse(BaseModel):
-    summary: Optional[str] = Field(default=None, description="Brief summary of the answer")
-    main_points: Optional[List[str]] = Field(default=None, description="List of main points")
-    sections: Optional[List[StructuredSection]] = Field(default=None, description="Organized sections")
-    key_findings: Optional[List[str]] = Field(default=None, description="Key findings or conclusions")
-    references: Optional[List[str]] = Field(default=None, description="References or sources mentioned")
+    sources: Optional[List[str]] = Field(default=None, description="URLs and references mentioned in the response")
+    authors: Optional[List[str]] = Field(default=None, description="Authors mentioned in the response")
 
 class QueryResponse(BaseModel):
     answer: str = Field(..., description="The agent's answer")
@@ -90,83 +83,57 @@ class HealthResponse(BaseModel):
     agent_initialized: bool = Field(..., description="Whether the agent is initialized")
     available_tools: List[str] = Field(..., description="List of available tools")
 
-# Helper function to extract structured data from response
+# Helper function to extract sources/URLs and authors from response
 def extract_structured_data(text: str) -> Optional[StructuredResponse]:
     """
-    Extract structured information from the LLM response.
-    Tries to find JSON structure first, then falls back to parsing text patterns.
+    Extract URLs, references, and authors from the LLM response.
+    Keep it simple - just sources and authors, nothing fancy.
     """
     try:
-        # Try to find JSON structure in the response
-        json_match = re.search(r'\{[^{}]*"summary"[^{}]*\}', text, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(0)
-            try:
-                data = json.loads(json_str)
-                return StructuredResponse(**data)
-            except:
-                pass
+        sources = []
+        authors = []
         
-        # Try to extract structured data from text patterns
-        structured = {}
+        # Extract URLs
+        urls = re.findall(r'https?://[^\s\)]+', text)
+        sources.extend(urls)
         
-        # Extract summary (first paragraph or explicit summary)
-        summary_match = re.search(r'(?:Summary|Overview|In summary)[:\s]+(.+?)(?:\n\n|\n[A-Z]|$)', text, re.IGNORECASE | re.DOTALL)
-        if summary_match:
-            structured['summary'] = summary_match.group(1).strip()
-        else:
-            # Fallback: use first paragraph if it's substantial
-            first_para = text.split('\n\n')[0].strip()
-            if len(first_para) > 50 and len(first_para) < 300:
-                structured['summary'] = first_para
+        # Extract ArXiv references (format: arXiv:1234.5678 or arXiv 1234.5678)
+        arxiv_refs = re.findall(r'arXiv[:\s]+([0-9]+\.[0-9]+(?:v[0-9]+)?)', text, re.IGNORECASE)
+        # Format ArXiv references as URLs
+        for arxiv_id in arxiv_refs:
+            sources.append(f"https://arxiv.org/abs/{arxiv_id}")
         
-        # Extract main points (bullet points or numbered lists)
-        points = []
-        # Look for bullet points
-        bullet_points = re.findall(r'(?:^|\n)[•\-\*]\s*(.+?)(?=\n|$)', text, re.MULTILINE)
-        # Look for numbered points
-        numbered_points = re.findall(r'(?:^|\n)\d+[\.\)]\s*(.+?)(?=\n|$)', text, re.MULTILINE)
-        points.extend(bullet_points)
-        points.extend(numbered_points)
-        if points:
-            structured['main_points'] = [p.strip() for p in points[:10]]  # Limit to 10 points
+        # Extract DOI references
+        dois = re.findall(r'doi[:\s/]+([0-9]+\.[0-9]+/[^\s\)]+)', text, re.IGNORECASE)
+        for doi in dois:
+            sources.append(f"https://doi.org/{doi}")
         
-        # Extract sections (headers followed by content)
-        sections = []
-        # Look for headers (lines that are all caps or have specific patterns)
-        header_pattern = r'(?:^|\n)([A-Z][A-Z\s]{3,}?)(?:\n|:)(.+?)(?=\n[A-Z][A-Z\s]{3,}|$)'
-        section_matches = re.finditer(header_pattern, text, re.MULTILINE | re.DOTALL)
-        for match in section_matches:
-            title = match.group(1).strip()
-            content = match.group(2).strip()
-            if len(content) > 20:  # Only include substantial sections
-                sections.append({"title": title, "content": content})
-        if sections:
-            structured['sections'] = [StructuredSection(**s) for s in sections[:5]]  # Limit to 5 sections
+        # Extract authors (common patterns: "by Author Name", "Author et al.", "Authors: Name1, Name2")
+        # Pattern 1: "by [Name]"
+        by_authors = re.findall(r'\bby\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)', text, re.IGNORECASE)
+        authors.extend(by_authors)
         
-        # Extract key findings
-        findings_pattern = r'(?:Key findings|Findings|Conclusions?)[:\s]+(.+?)(?=\n\n|\n[A-Z]|$)'
-        findings_match = re.search(findings_pattern, text, re.IGNORECASE | re.DOTALL)
-        if findings_match:
-            findings_text = findings_match.group(1)
-            findings_list = re.findall(r'[•\-\*]\s*(.+?)(?=\n|$)', findings_text)
-            if findings_list:
-                structured['key_findings'] = [f.strip() for f in findings_list[:5]]
+        # Pattern 2: "Authors: Name1, Name2" or "Author: Name"
+        author_pattern = re.findall(r'(?:Authors?|Written by|Published by)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\s+et\s+al\.)?(?:\s*,\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)*)', text, re.IGNORECASE)
+        for match in author_pattern:
+            # Split by comma and clean up
+            author_list = [a.strip() for a in match.split(',')]
+            authors.extend(author_list)
         
-        # Extract references (URLs or citation patterns)
-        references = []
-        # URLs
-        urls = re.findall(r'https?://[^\s]+', text)
-        references.extend(urls)
-        # ArXiv references
-        arxiv_refs = re.findall(r'arXiv[:\s]+([^\s,]+)', text, re.IGNORECASE)
-        references.extend(arxiv_refs)
-        if references:
-            structured['references'] = list(set(references))[:10]  # Remove duplicates, limit to 10
+        # Pattern 3: "[Name] et al." format
+        et_al_pattern = re.findall(r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s+et\s+al\.', text)
+        authors.extend(et_al_pattern)
         
-        # Only return if we extracted something meaningful
-        if structured:
-            return StructuredResponse(**structured)
+        # Remove duplicates and clean up
+        sources = list(set(sources))
+        authors = list(set([a.strip() for a in authors if len(a.strip()) > 2]))  # Filter out very short matches
+        
+        # Only return if we found something
+        if sources or authors:
+            return StructuredResponse(
+                sources=sources[:20] if sources else None,  # Limit to 20 sources
+                authors=authors[:10] if authors else None  # Limit to 10 authors
+            )
         
     except Exception as e:
         print(f"Error extracting structured data: {str(e)}")
