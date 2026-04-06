@@ -1,202 +1,205 @@
 ---
-title: Scientific Research Agent
-emoji: 🔬
-colorFrom: purple
-colorTo: blue
+title: Heisenberg — Autonomous Scientific Agent
+emoji: ⚗️
+colorFrom: gray
+colorTo: indigo
 sdk: docker
 app_file: app.py
 pinned: false
 license: mit
 ---
 
-# 🔬 Scientific Research Agent
+# Heisenberg — Autonomous Scientific Agent
 
-An autonomous AI agent specialized in scientific research that uses multiple tools to provide accurate, evidence-based answers. Built with LangChain, Groq (Llama 3), and scientific research tools.
+An autonomous AI agent that answers scientific questions with the precision and authority of Walter White — built on LangChain, Groq (Llama 3.3 70B), and a curated set of research tools.
 
-## 🛠️ Available Tools
+The agent does not approximate. It calculates.
 
-The agent has access to the following scientific tools:
+---
 
-- **🌐 Web Search (DuckDuckGo)**: For up-to-date information, news, and recent events
-- **📚 Wikipedia**: For detailed encyclopedic information and general concepts
-- **🔬 ArXiv**: To search and retrieve scientific articles, academic papers, and scientific literature
-- **🧮 Scientific Calculator**: For complex mathematical calculations including trigonometric, logarithmic, and exponential functions
+## Architecture
 
-## 🚀 Installation
+The agent (`SimpleScientificAgent`) intercepts each query, determines the optimal tool via keyword heuristics, executes it, injects the result as context, and passes the enriched message to the LLM for synthesis. The LLM never calls tools directly — the agent orchestrates everything.
 
-1. Clone the repository:
+```
+User Query
+    │
+    ▼
+Tool Selection (heuristic)
+    │
+    ├── Web Search (DuckDuckGo)
+    ├── Wikipedia
+    ├── ArXiv
+    └── Calculator
+    │
+    ▼
+Context Injection → LLM (Groq / Llama 3.3 70B)
+    │
+    ▼
+Response
+```
+
+---
+
+## Tools
+
+| Tool | Purpose |
+|---|---|
+| DuckDuckGo Search | Real-time web information, news, recent events |
+| Wikipedia | Encyclopedic knowledge, definitions, background |
+| ArXiv | Academic papers — titles, abstracts, authors, PDF links |
+| Scientific Calculator | Mathematical expressions, trigonometric, logarithmic, exponential functions |
+
+---
+
+## Stack
+
+- **LangChain** + **LangChain-Groq** — agent framework and LLM integration
+- **Groq API** — inference backend (Llama 3.3 70B Versatile)
+- **FastAPI** + **Uvicorn** — REST API layer
+- **DuckDuckGo Search**, **Wikipedia**, **ArXiv** — data sources
+- **Docker** — containerized deployment
+
+---
+
+## Local Setup
+
+**1. Clone the repository**
 ```bash
-git clone <repo-url>
+git clone https://github.com/sidnei-almeida/langchain-autonomous-agent.git
 cd langchain-autonomous-agent
 ```
 
-2. Create and activate a virtual environment:
+**2. Create a virtual environment**
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 ```
 
-3. Install dependencies:
+**3. Install dependencies**
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Configure your Groq API key:
+**4. Configure environment**
 ```bash
-# Edit the .env file and add your key:
-GROQ_API_KEY="your_key_here"
+# Create a .env file
+echo "GROQ_API_KEY=your_key_here" > .env
 ```
 
-## 📖 Usage
+Get your Groq API key at [console.groq.com](https://console.groq.com).
 
-### CLI Mode (Interactive)
-```bash
-python agent.py
-```
+---
 
-### CLI Mode (Command Line Argument)
-```bash
-python agent.py "What are the latest advances in machine learning?"
-```
+## Usage
 
-### Web Interface (Gradio)
+### REST API (default)
+
 ```bash
 python app.py
 ```
 
-Then open your browser to `http://localhost:7860`
+The API will be available at `http://localhost:7860`. Interactive docs at `http://localhost:7860/docs`.
 
-### Docker Deployment
+### CLI
 
-#### Using Docker Compose (Recommended)
 ```bash
-# Make sure your .env file has GROQ_API_KEY set
+# Interactive mode
+python agent.py
+
+# Single question
+python agent.py "What are the latest advances in quantum computing?"
+```
+
+### Docker
+
+```bash
+# Using Docker Compose
 docker-compose up --build
+
+# Using Docker directly
+docker build -t heisenberg-agent .
+docker run -p 7860:7860 -e GROQ_API_KEY=your_key_here heisenberg-agent
 ```
 
-The app will be available at `http://localhost:7860`
+---
 
-#### Using Docker directly
+## API Reference
+
+### `POST /api/query`
+
+Single-turn question with tool execution and structured response.
+
+```json
+{
+  "question": "Find recent papers on neural scaling laws"
+}
+```
+
+Response includes `answer`, `tools_used`, `processing_time`, and extracted `structured` data (URLs, ArXiv IDs, authors).
+
+### `POST /api/chat`
+
+Multi-turn conversation with message history.
+
+```json
+{
+  "messages": [
+    { "role": "user", "content": "What is entropy?" }
+  ]
+}
+```
+
+### `GET /health`
+
+Returns service status and agent initialization state.
+
+Full API documentation: [`API_DOCS.md`](API_DOCS.md)
+
+---
+
+## Deployment
+
+### Hugging Face Spaces (Docker SDK)
+
+This Space runs via Docker. To deploy your own instance:
+
+1. Fork or clone this repository
+2. Create a new Space at [huggingface.co/spaces](https://huggingface.co/spaces) with **Docker** as the SDK
+3. Push the repository to the Space's git remote
+4. Add `GROQ_API_KEY` as a Secret in the Space settings (Settings → Secrets)
+
+The Space will build automatically and serve the FastAPI application.
+
+### Cloud Deployment (AWS / GCP / Azure)
+
 ```bash
-# Build the image
-docker build -t scientific-agent .
-
-# Run the container
-docker run -p 7860:7860 -e GROQ_API_KEY=your_key_here scientific-agent
+# Build and push image
+docker build -t heisenberg-agent .
+docker tag heisenberg-agent your-registry/heisenberg-agent:latest
+docker push your-registry/heisenberg-agent:latest
 ```
 
-#### Stop the container
-```bash
-# If using docker-compose
-docker-compose down
+Set the `GROQ_API_KEY` environment variable in your cloud provider's secrets manager or container configuration.
 
-# If using docker directly
-docker stop <container_id>
-```
+---
 
-## 🌐 Deployment Options
-
-### Option 1: Hugging Face Spaces (No Docker needed)
-
-This project is ready to deploy on Hugging Face Spaces without Docker!
-
-**Steps to Deploy:**
-
-1. **Create a new Space** on [Hugging Face Spaces](https://huggingface.co/spaces)
-   - Choose **Gradio** as the SDK
-   - Select **Python** as the runtime
-
-2. **Upload your files**:
-   - `app.py` (main application)
-   - `agent.py` (agent logic)
-   - `requirements.txt` (dependencies)
-
-3. **Set up secrets**:
-   - Go to your Space settings
-   - Add a secret named `GROQ_API_KEY` with your Groq API key
-
-4. **Deploy**:
-   - The Space will automatically build and deploy
-   - Your agent will be available at `https://huggingface.co/spaces/your-username/your-space-name`
-
-**Note:** Hugging Face Spaces handles containerization automatically, so you don't need Docker for this option.
-
-### Option 2: Docker Deployment
-
-For deploying on other platforms (AWS, Google Cloud, Azure, etc.) or local containerized environments:
-
-**Using Docker Compose:**
-```bash
-# Set your API key in .env file
-echo "GROQ_API_KEY=your_key_here" > .env
-
-# Build and run
-docker-compose up --build
-```
-
-**Using Docker directly:**
-```bash
-# Build image
-docker build -t scientific-agent .
-
-# Run container
-docker run -p 7860:7860 -e GROQ_API_KEY=your_key_here scientific-agent
-```
-
-**Benefits of Docker:**
-- Consistent environment across different platforms
-- Easy deployment to cloud services
-- Isolated dependencies
-- Production-ready configuration
-
-### Environment Variables
-
-The agent automatically reads the `GROQ_API_KEY` from:
-- Environment variables (Docker, Hugging Face Spaces secrets)
-- `.env` file (local development)
-
-## 💡 Example Questions
-
-- "Search for recent articles about quantum computing on ArXiv"
-- "Explain the concept of entropy using Wikipedia and calculate some examples"
-- "What are the latest discoveries about CRISPR?"
-- "Calculate sin(pi/2) + cos(0) + sqrt(16)"
-- "Find recent papers on machine learning from ArXiv"
-
-## 🔧 Technologies
-
-- **LangChain**: Framework for building AI agents
-- **Groq**: LLM API with Llama 3.3 70B model
-- **Gradio**: Web interface framework
-- **DuckDuckGo Search**: Web search
-- **Wikipedia API**: Encyclopedia access
-- **ArXiv API**: Scientific articles access
-- **Python**: Programming language
-
-## 📝 Project Structure
+## Project Structure
 
 ```
 langchain-autonomous-agent/
-├── agent.py          # Main agent code
-├── app.py            # Gradio web interface (for Hugging Face Spaces)
-├── requirements.txt  # Project dependencies
-├── Dockerfile        # Docker image configuration
-├── docker-compose.yml # Docker Compose configuration
-├── .dockerignore     # Files to exclude from Docker build
-├── .env             # Environment variables (not versioned)
-└── README.md        # This file
+├── agent.py            # Agent logic, tools, and persona
+├── api.py              # FastAPI application and endpoints
+├── app.py              # Entry point (Uvicorn server)
+├── requirements.txt    # Python dependencies
+├── Dockerfile          # Container image definition
+├── docker-compose.yml  # Local orchestration
+├── API_DOCS.md         # Full API documentation
+└── README.md           # This file
 ```
 
-## 🎯 Features
+---
 
-- ✅ Access to multiple scientific information sources
-- ✅ Automatic search in ArXiv scientific articles
-- ✅ Complex mathematical calculations
-- ✅ Interactive and user-friendly interface
-- ✅ Evidence-based answers
-- ✅ Source citation when relevant
-- ✅ Ready for Hugging Face Spaces deployment
+## License
 
-## 📄 License
-
-This project is open source and available for educational and research use.
+MIT — open for educational and research use.
