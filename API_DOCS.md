@@ -1,21 +1,28 @@
-# 🔬 Scientific Research Agent - API Documentation
+# Heisenberg — REST API Reference
 
-## Base URL
+This document describes the HTTP API exposed by the FastAPI application (`api.py`). For interactive exploration, use the OpenAPI UI at `/docs` on a running instance.
 
-```
-http://localhost:7860  # Local development
-https://huggingface.co/spaces/salmeida/my-scientific-agent  # Production
-```
+---
+
+## Base URLs
+
+| Environment | URL |
+|-------------|-----|
+| Local development | `http://localhost:7860` |
+| Hugging Face Spaces | `https://huggingface.co/spaces/salmeida/langchain-agent` (append paths as needed) |
+
+Replace the Space path if you deploy under a different namespace or name.
+
+---
 
 ## Endpoints
 
-### 1. Root - API Information
+### GET `/`
 
-**GET** `/`
+Returns service metadata and a map of available routes.
 
-Returns basic API information and available endpoints.
+**Response (example)**
 
-**Response:**
 ```json
 {
   "name": "Scientific Research Agent API",
@@ -33,13 +40,12 @@ Returns basic API information and available endpoints.
 
 ---
 
-### 2. Health Check
+### GET `/health`
 
-**GET** `/health`
+Reports process health and whether the agent singleton has been initialized.
 
-Check API health status and agent initialization.
+**Response (example)**
 
-**Response:**
 ```json
 {
   "status": "healthy",
@@ -53,37 +59,23 @@ Check API health status and agent initialization.
 }
 ```
 
+On initialization failure, `status` may describe the error and `available_tools` may be empty.
+
 ---
 
-### 3. Get Available Tools
+### GET `/api/tools`
 
-**GET** `/api/tools`
+Returns a static catalog of integrated tools with human-readable descriptions.
 
-Get list of all available tools with descriptions.
+**Response (shape)**
 
-**Response:**
 ```json
 {
   "tools": [
     {
       "name": "Web Search",
       "provider": "DuckDuckGo",
-      "description": "Searches for up-to-date information on the internet..."
-    },
-    {
-      "name": "Wikipedia",
-      "provider": "Wikipedia API",
-      "description": "Searches for detailed and encyclopedic information..."
-    },
-    {
-      "name": "ArXiv",
-      "provider": "ArXiv API",
-      "description": "Searches and retrieves scientific articles..."
-    },
-    {
-      "name": "Scientific Calculator",
-      "provider": "Custom",
-      "description": "Performs complex mathematical calculations..."
+      "description": "..."
     }
   ]
 }
@@ -91,13 +83,17 @@ Get list of all available tools with descriptions.
 
 ---
 
-### 4. Query Agent (Single Question)
+### POST `/api/query`
 
-**POST** `/api/query`
+Single-turn query. The server builds a fresh message list (with system prompt), invokes the agent once, and returns the final assistant message plus metadata.
 
-Query the agent with a single question. Best for one-off queries.
+**Request body**
 
-**Request Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `question` | string | Yes | User question (minimum length 1) |
+| `include_history` | boolean | No | Reserved; default `false` |
+
 ```json
 {
   "question": "What are the latest advances in quantum computing?",
@@ -105,165 +101,121 @@ Query the agent with a single question. Best for one-off queries.
 }
 ```
 
-**Response:**
-```json
-{
-  "answer": "According to recent research on ArXiv...",
-  "question": "What are the latest advances in quantum computing?",
-  "tools_used": ["arxiv", "wikipedia"],
-  "processing_time": 12.45
-}
-```
+**Response body**
 
-**cURL Example:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `answer` | string | Final assistant text |
+| `question` | string | Echo of the submitted question |
+| `tools_used` | string[] \| null | Tool identifiers used during that turn, if any |
+| `processing_time` | number \| null | Elapsed seconds (two decimal places typical) |
+| `structured` | object \| null | Optional extraction of URLs, arXiv-style links, DOIs, and inferred authors |
+
+**cURL**
+
 ```bash
-curl -X POST "http://localhost:7860/api/query" \
+curl -s -X POST "http://localhost:7860/api/query" \
   -H "Content-Type: application/json" \
-  -d '{
-    "question": "What are the latest advances in quantum computing?"
-  }'
+  -d '{"question": "What are the latest advances in quantum computing?"}'
 ```
 
 ---
 
-### 5. Chat with Agent (Multi-turn Conversation)
+### POST `/api/chat`
 
-**POST** `/api/chat`
+Multi-turn conversation. Messages are converted to LangChain `HumanMessage` / `AIMessage` / `SystemMessage` objects before invocation.
 
-Chat with the agent using conversation history. Best for multi-turn conversations.
+**Request body**
 
-**Request Body:**
 ```json
 {
   "messages": [
-    {
-      "role": "user",
-      "content": "What is quantum entanglement?"
-    },
-    {
-      "role": "assistant",
-      "content": "Quantum entanglement is a phenomenon..."
-    },
-    {
-      "role": "user",
-      "content": "Can you give me an example?"
-    }
+    { "role": "user", "content": "What is quantum entanglement?" },
+    { "role": "assistant", "content": "Quantum entanglement is ..." },
+    { "role": "user", "content": "Can you give me an example?" }
   ]
 }
 ```
 
-**Response:**
-```json
-{
-  "message": {
-    "role": "assistant",
-    "content": "Sure! Here's an example of quantum entanglement..."
-  },
-  "tools_used": ["wikipedia", "calculator"]
-}
-```
+Supported `role` values: `user`, `assistant`, `system`.
 
-**cURL Example:**
+**Response body**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `message` | object | `{ "role": "assistant", "content": "..." }` |
+| `tools_used` | string[] \| null | Tools used for the last generation |
+| `processing_time` | number \| null | Elapsed seconds |
+| `structured` | object \| null | Same extraction semantics as `/api/query` |
+
+**cURL**
+
 ```bash
-curl -X POST "http://localhost:7860/api/chat" \
+curl -s -X POST "http://localhost:7860/api/chat" \
   -H "Content-Type: application/json" \
-  -d '{
-    "messages": [
-      {"role": "user", "content": "What is quantum entanglement?"}
-    ]
-  }'
+  -d '{"messages": [{"role": "user", "content": "What is quantum entanglement?"}]}'
 ```
 
 ---
 
-## Interactive API Documentation
+## Interactive documentation
 
-FastAPI provides automatic interactive documentation:
+| UI | Path |
+|----|------|
+| Swagger UI | `/docs` |
+| ReDoc | `/redoc` |
 
-- **Swagger UI**: `http://localhost:7860/docs`
-- **ReDoc**: `http://localhost:7860/redoc`
+---
 
-## Error Responses
+## Error handling
 
-All endpoints may return the following error responses:
+Validation failures typically yield **HTTP 422** with a FastAPI validation detail payload.
 
-**400 Bad Request:**
-```json
-{
-  "detail": "Validation error message"
-}
-```
+Application logic may return **HTTP 200** with a fallback `answer` string when the model produces no content or when an internal exception is caught (see implementation in `api.py`). For strict error semantics, adapt the handlers in your fork.
 
-**500 Internal Server Error:**
-```json
-{
-  "detail": "Error processing query: error message"
-}
-```
+---
 
-## Rate Limiting
+## Rate limiting and authentication
 
-Currently, there are no rate limits implemented. Consider implementing rate limiting for production use.
+The reference deployment does not enforce rate limits or API-key authentication. For production, place the service behind a reverse proxy or API gateway with throttling and credential checks.
 
-## Authentication
+---
 
-Currently, no authentication is required. For production, consider adding API key authentication.
+## Client examples
 
-## Example Usage (Python)
+**Python**
 
 ```python
 import requests
 
-# Single query
-response = requests.post(
+r = requests.post(
     "http://localhost:7860/api/query",
-    json={"question": "What is machine learning?"}
+    json={"question": "What is machine learning?"},
+    timeout=120,
 )
-print(response.json())
+print(r.json())
 
-# Chat conversation
-response = requests.post(
+r2 = requests.post(
     "http://localhost:7860/api/chat",
-    json={
-        "messages": [
-            {"role": "user", "content": "Explain quantum computing"}
-        ]
-    }
+    json={"messages": [{"role": "user", "content": "Explain quantum computing"}]},
+    timeout=120,
 )
-print(response.json())
+print(r2.json())
 ```
 
-## Example Usage (JavaScript)
+**JavaScript (fetch)**
 
 ```javascript
-// Single query
-const response = await fetch('http://localhost:7860/api/query', {
+const res = await fetch('http://localhost:7860/api/query', {
   method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    question: 'What is machine learning?'
-  })
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ question: 'What is machine learning?' }),
 });
-
-const data = await response.json();
-console.log(data);
-
-// Chat conversation
-const chatResponse = await fetch('http://localhost:7860/api/chat', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    messages: [
-      { role: 'user', content: 'Explain quantum computing' }
-    ]
-  })
-});
-
-const chatData = await chatResponse.json();
-console.log(chatData);
+console.log(await res.json());
 ```
 
+---
+
+## Versioning
+
+The API version string returned by `GET /` is defined in `api.py` (`FastAPI(..., version="1.0.0")`). Increment it when you introduce breaking changes.

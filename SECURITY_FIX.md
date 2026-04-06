@@ -1,82 +1,55 @@
-# 🔒 Security Fix - Removed API Key from Git History
+# Security advisory — credential handling
 
-## What Happened
+This document describes recommended practices for API keys and related secrets used with this repository. It also records a class of incident (accidental commit of environment files) and the mitigations applied in the project configuration.
 
-The `.env` file containing your Groq API key was accidentally committed to Git. GitHub's push protection detected this and blocked the push.
+---
 
-## What Was Fixed
+## Scope
 
-1. ✅ Created `.gitignore` to prevent future commits of sensitive files
-2. ✅ Removed `.env` from the Git index
-3. ✅ Amended the commit to exclude `.env`
-4. ✅ Your local `.env` file is safe (still exists locally, just not in Git)
+- Groq API keys (`GROQ_API_KEY`)
+- Any future third-party tokens added to the codebase
 
-## Next Steps
+---
 
-### Option 1: Force Push (If you're working alone)
+## Policy
 
-**⚠️ WARNING: Only do this if you're the only one working on this repository!**
+1. **Never commit secrets** — `.env` and similar files must remain local or in platform secret stores only.
+2. **Use `.gitignore`** — The repository excludes `.env`, virtual environments, and common cache paths.
+3. **Rotate on exposure** — If a key appears in Git history, chat logs, or CI output, revoke it at the provider and issue a new key.
+4. **Least privilege** — Create keys with the minimum scopes required by your use case.
 
-```bash
-git push --force origin main
-```
+---
 
-### Option 2: Create a New Branch (Safer)
+## If a key was committed
 
-If others might be working on this repo:
+1. **Revoke** the exposed key in the Groq console.
+2. **Generate** a new key and update deployment secrets and local `.env` only.
+3. **Remove** the file from the index going forward; for historical commits, use `git filter-repo` or GitHub’s secret scanning remediation if available — coordinate with repository admins before rewriting public history.
 
-```bash
-# Create a new branch
-git checkout -b fix/remove-api-key
+---
 
-# Push the new branch
-git push origin fix/remove-api-key
+## Production hardening
 
-# Then create a PR to merge into main
-```
+- Serve the API behind TLS.
+- Restrict CORS (`allow_origins`) to known front-end origins.
+- Add authentication (API keys, OAuth2, mutual TLS) at the reverse proxy or application layer.
+- Apply rate limiting and request size limits at the edge.
 
-### Option 3: Reset and Recreate Commit (If force push is not allowed)
+---
 
-```bash
-# Reset to the commit before the problematic one
-git reset --soft HEAD~1
+## Verification
 
-# Remove .env from staging
-git reset HEAD .env
+To confirm `.env` is not tracked:
 
-# Re-add all files except .env
-git add .
-
-# Create new commit
-git commit -m "Add scientific agent API and Docker support"
-
-# Push
-git push origin main
-```
-
-## Important Notes
-
-1. **Your API key is still safe locally** - The `.env` file still exists on your machine
-2. **The key was exposed in the commit** - Consider rotating your Groq API key:
-   - Go to https://console.groq.com
-   - Generate a new API key
-   - Update your local `.env` file
-   - Revoke the old key if possible
-
-3. **Future commits** - The `.gitignore` will now prevent `.env` from being committed again
-
-## Verify the Fix
-
-Check that `.env` is not in the commit:
 ```bash
 git show HEAD:.env
-# Should show: fatal: path '.env' exists on disk, but not in 'HEAD'
 ```
 
-## Best Practices Going Forward
+A healthy repository reports that the path does not exist in `HEAD`.
 
-- ✅ Always use `.gitignore` for sensitive files
-- ✅ Use environment variables or secrets management
-- ✅ Never commit API keys, passwords, or tokens
-- ✅ Use `.env.example` as a template (without real values)
+---
 
+## References
+
+- [Groq console](https://console.groq.com) — key management
+- [GitHub push protection](https://docs.github.com/code-security/secret-scanning/about-secret-scanning) — automated detection

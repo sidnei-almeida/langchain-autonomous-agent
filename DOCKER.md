@@ -1,216 +1,157 @@
-# 🐳 Docker Deployment Guide
+# Container deployment guide
 
-This guide explains how to deploy the Scientific Research Agent using Docker.
+This guide covers building and running the Heisenberg scientific agent with Docker and Docker Compose.
 
-## Quick Start
+---
 
-### Prerequisites
-- Docker installed ([Get Docker](https://docs.docker.com/get-docker/))
-- Docker Compose installed (usually comes with Docker Desktop)
-- Groq API key ([Get it here](https://console.groq.com))
+## Prerequisites
 
-### Option 1: Docker Compose (Recommended)
+- Docker Engine ([installation](https://docs.docker.com/get-docker/))
+- Docker Compose v2 (bundled with Docker Desktop on many systems)
+- A valid `GROQ_API_KEY` from [console.groq.com](https://console.groq.com)
 
-1. **Set up environment variables:**
-   ```bash
-   echo "GROQ_API_KEY=your_groq_api_key_here" > .env
-   ```
+---
 
-2. **Build and run:**
-   ```bash
-   docker-compose up --build
-   ```
+## Quick start — Docker Compose
 
-3. **Access the app:**
-   - Open your browser to `http://localhost:7860`
-
-4. **Stop the container:**
-   ```bash
-   docker-compose down
-   ```
-
-### Option 2: Docker CLI
-
-1. **Build the image:**
-   ```bash
-   docker build -t scientific-agent .
-   ```
-
-2. **Run the container:**
-   ```bash
-   docker run -d \
-     --name scientific-agent \
-     -p 7860:7860 \
-     -e GROQ_API_KEY=your_groq_api_key_here \
-     scientific-agent
-   ```
-
-3. **View logs:**
-   ```bash
-   docker logs -f scientific-agent
-   ```
-
-4. **Stop and remove:**
-   ```bash
-   docker stop scientific-agent
-   docker rm scientific-agent
-   ```
-
-## Production Deployment
-
-### Environment Variables
-
-For production, use environment variables or secrets management:
+**1. Provide the API key**
 
 ```bash
-# Using environment variable
+echo "GROQ_API_KEY=your_groq_api_key_here" > .env
+```
+
+**2. Build and start**
+
+```bash
+docker compose up --build
+```
+
+**3. Verify**
+
+Open `http://localhost:7860/docs` or call `GET /health`.
+
+**4. Stop**
+
+```bash
+docker compose down
+```
+
+---
+
+## Quick start — Docker CLI
+
+**Build**
+
+```bash
+docker build -t heisenberg-agent .
+```
+
+**Run**
+
+```bash
+docker run -d \
+  --name heisenberg-agent \
+  -p 7860:7860 \
+  -e GROQ_API_KEY=your_groq_api_key_here \
+  heisenberg-agent
+```
+
+**Logs**
+
+```bash
+docker logs -f heisenberg-agent
+```
+
+**Stop and remove**
+
+```bash
+docker stop heisenberg-agent
+docker rm heisenberg-agent
+```
+
+---
+
+## Production considerations
+
+### Environment variables
+
+Inject secrets via your orchestrator or host environment; avoid baking keys into images.
+
+```bash
 export GROQ_API_KEY=your_key_here
-docker-compose up -d
-
-# Or pass directly
-docker run -p 7860:7860 -e GROQ_API_KEY=your_key_here scientific-agent
+docker compose up -d
 ```
 
-### Docker Compose for Production
+### Health checks
 
-Edit `docker-compose.yml` for production settings:
+The FastAPI application exposes `GET /health`. Point container or load-balancer health checks at:
 
-```yaml
-version: '3.8'
-
-services:
-  scientific-agent:
-    build: .
-    ports:
-      - "7860:7860"
-    environment:
-      - GROQ_API_KEY=${GROQ_API_KEY}
-    restart: always
-    healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:7860')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+```
+http://127.0.0.1:7860/health
 ```
 
-## Cloud Deployment
+Adjust the Dockerfile or Compose `healthcheck` if your runtime uses a different internal hostname.
 
-### AWS ECS / Fargate
+### Example Compose overrides
 
-1. Build and push to ECR:
-   ```bash
-   docker build -t scientific-agent .
-   docker tag scientific-agent:latest your-account.dkr.ecr.region.amazonaws.com/scientific-agent:latest
-   docker push your-account.dkr.ecr.region.amazonaws.com/scientific-agent:latest
-   ```
+You may add `restart: unless-stopped`, CPU and memory limits, and read-only root filesystems according to your security baseline.
 
-2. Create ECS task definition with environment variable `GROQ_API_KEY`
+---
+
+## Cloud platforms
+
+### AWS (ECS / Fargate)
+
+1. Build and push to Amazon ECR.
+2. Reference the image in a task definition.
+3. Store `GROQ_API_KEY` in AWS Secrets Manager or SSM Parameter Store and inject as an environment variable.
 
 ### Google Cloud Run
 
-```bash
-# Build and push
-gcloud builds submit --tag gcr.io/your-project/scientific-agent
+Build with Cloud Build or Artifact Registry, deploy with `--set-secrets` or `--set-env-vars` for `GROQ_API_KEY`, and configure concurrency and timeouts for LLM latency.
 
-# Deploy
-gcloud run deploy scientific-agent \
-  --image gcr.io/your-project/scientific-agent \
-  --platform managed \
-  --region us-central1 \
-  --set-env-vars GROQ_API_KEY=your_key_here \
-  --allow-unauthenticated
-```
+### Azure Container Instances / Container Apps
 
-### Azure Container Instances
+Push to Azure Container Registry, deploy the image, and set environment variables from Azure Key Vault references.
 
-```bash
-# Build and push to ACR
-az acr build --registry your-registry --image scientific-agent:latest .
-
-# Deploy
-az container create \
-  --resource-group your-resource-group \
-  --name scientific-agent \
-  --image your-registry.azurecr.io/scientific-agent:latest \
-  --environment-variables GROQ_API_KEY=your_key_here \
-  --ports 7860
-```
+---
 
 ## Troubleshooting
 
-### Container won't start
-- Check logs: `docker logs scientific-agent`
-- Verify API key is set: `docker exec scientific-agent env | grep GROQ_API_KEY`
+| Symptom | Check |
+|---------|--------|
+| Container exits immediately | `docker logs <container>`; verify `GROQ_API_KEY` is set |
+| Port conflict | Map a different host port, e.g. `-p 8080:7860` |
+| Slow first request | Agent initialization on first use; allow warm-up |
+| Build failures | Network access for `pip install`; sufficient disk and memory |
 
-### Port already in use
-- Change port mapping: `-p 8080:7860` (use port 8080 instead)
-- Or stop the service using port 7860
+---
 
-### Build fails
-- Check internet connection (needs to download dependencies)
-- Verify Docker has enough resources (memory/disk)
-- Try: `docker system prune` to free space
+## Image optimization
 
-### Health check fails
-- Wait longer for startup (agent initialization takes time)
-- Check if Gradio is running: `docker exec scientific-agent ps aux | grep python`
+The default image uses `python:3.11-slim`. For smaller artifacts, consider multi-stage builds: install dependencies in a builder stage and copy only site-packages and application code into the final layer.
 
-## Image Size Optimization
+---
 
-The current Dockerfile uses Python 3.11 slim. For even smaller images:
+## Security practices
 
-```dockerfile
-# Use multi-stage build
-FROM python:3.11-slim as builder
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --user -r requirements.txt
+- Never commit `.env` files; use `.gitignore` and platform secrets.
+- Run the process as a non-root user in production images when feasible.
+- Scan images with your organization’s vulnerability workflow (`docker scout`, Trivy, etc.).
+- Place the service behind TLS termination (reverse proxy or managed ingress).
 
-FROM python:3.11-slim
-WORKDIR /app
-COPY --from=builder /root/.local /root/.local
-COPY agent.py app.py .
-ENV PATH=/root/.local/bin:$PATH
-CMD ["python", "app.py"]
-```
-
-## Security Best Practices
-
-1. **Never commit `.env` files** - Use secrets management
-2. **Use non-root user** in production:
-   ```dockerfile
-   RUN useradd -m -u 1000 appuser
-   USER appuser
-   ```
-3. **Scan for vulnerabilities:**
-   ```bash
-   docker scan scientific-agent
-   ```
-4. **Limit resources:**
-   ```yaml
-   deploy:
-     resources:
-       limits:
-         cpus: '1'
-         memory: 2G
-   ```
+---
 
 ## Monitoring
 
-### View container stats
-```bash
-docker stats scientific-agent
-```
+- `docker stats` for CPU and memory
+- Application logs via `docker logs` or centralized logging driver
+- External synthetic checks against `/health`
 
-### Check health
-```bash
-docker inspect --format='{{.State.Health.Status}}' scientific-agent
-```
+---
 
-## Next Steps
+## Next steps
 
-- Set up reverse proxy (nginx/traefik) for production
-- Add SSL/TLS certificates
-- Set up monitoring and logging
-- Configure auto-scaling based on load
-
+- Terminate TLS at nginx, Traefik, or a cloud load balancer
+- Add authentication and rate limiting at the edge
+- Define SLOs for latency and error rate on `/api/query` and `/api/chat`

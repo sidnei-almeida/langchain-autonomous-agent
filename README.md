@@ -17,9 +17,24 @@ The agent does not approximate. It calculates.
 
 ---
 
+## Overview
+
+This repository provides a production-oriented REST API and CLI for scientific Q&A. The system combines heuristic tool routing (web search, Wikipedia, arXiv, calculator) with a Groq-hosted large language model. Responses are synthesized from retrieved context and structured metadata when applicable.
+
+| Document | Description |
+|----------|-------------|
+| [API_DOCS.md](API_DOCS.md) | HTTP API specification and examples |
+| [DOCKER.md](DOCKER.md) | Container build, deployment, and operations |
+| [README_HF.md](README_HF.md) | Hugging Face Spaces deployment |
+| [SECURITY_FIX.md](SECURITY_FIX.md) | Credential hygiene and incident response |
+| [CHANGELOG.md](CHANGELOG.md) | Version history and implementation notes |
+| [LICENSE](LICENSE) | MIT License (full text) |
+
+---
+
 ## Architecture
 
-The agent (`SimpleScientificAgent`) intercepts each query, determines the optimal tool via keyword heuristics, executes it, injects the result as context, and passes the enriched message to the LLM for synthesis. The LLM never calls tools directly — the agent orchestrates everything.
+The agent (`SimpleScientificAgent`) intercepts each query, determines the optimal tool via keyword heuristics, executes it, injects the result as context, and passes the enriched message to the LLM for synthesis. The LLM does not invoke tools directly; the application layer orchestrates tool use.
 
 ```
 User Query
@@ -44,7 +59,7 @@ Response
 ## Tools
 
 | Tool | Purpose |
-|---|---|
+|------|---------|
 | DuckDuckGo Search | Real-time web information, news, recent events |
 | Wikipedia | Encyclopedic knowledge, definitions, background |
 | ArXiv | Academic papers — titles, abstracts, authors, PDF links |
@@ -54,152 +69,152 @@ Response
 
 ## Stack
 
-- **LangChain** + **LangChain-Groq** — agent framework and LLM integration
-- **Groq API** — inference backend (Llama 3.3 70B Versatile)
-- **FastAPI** + **Uvicorn** — REST API layer
-- **DuckDuckGo Search**, **Wikipedia**, **ArXiv** — data sources
+- **LangChain** and **langchain-groq** — agent integration and Groq chat model
+- **Groq API** — inference (Llama 3.3 70B Versatile)
+- **FastAPI** and **Uvicorn** — REST API
+- **DuckDuckGo Search**, **Wikipedia**, **ArXiv** — external data sources
 - **Docker** — containerized deployment
 
 ---
 
-## Local Setup
+## Prerequisites
+
+- Python 3.11 or compatible
+- A valid [Groq API key](https://console.groq.com)
+
+---
+
+## Local setup
 
 **1. Clone the repository**
+
 ```bash
 git clone https://github.com/sidnei-almeida/langchain-autonomous-agent.git
 cd langchain-autonomous-agent
 ```
 
 **2. Create a virtual environment**
+
 ```bash
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 ```
 
 **3. Install dependencies**
+
 ```bash
 pip install -r requirements.txt
 ```
 
 **4. Configure environment**
+
 ```bash
-# Create a .env file
 echo "GROQ_API_KEY=your_key_here" > .env
 ```
-
-Get your Groq API key at [console.groq.com](https://console.groq.com).
 
 ---
 
 ## Usage
 
-### REST API (default)
+### REST API
 
 ```bash
 python app.py
 ```
 
-The API will be available at `http://localhost:7860`. Interactive docs at `http://localhost:7860/docs`.
+- Base URL: `http://localhost:7860`
+- OpenAPI UI: `http://localhost:7860/docs`
+- ReDoc: `http://localhost:7860/redoc`
 
 ### CLI
 
 ```bash
-# Interactive mode
 python agent.py
-
-# Single question
 python agent.py "What are the latest advances in quantum computing?"
 ```
 
 ### Docker
 
 ```bash
-# Using Docker Compose
 docker-compose up --build
+```
 
-# Using Docker directly
+```bash
 docker build -t heisenberg-agent .
 docker run -p 7860:7860 -e GROQ_API_KEY=your_key_here heisenberg-agent
 ```
 
 ---
 
-## API Reference
+## API summary
 
-### `POST /api/query`
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | Service metadata and endpoint index |
+| GET | `/health` | Liveness and agent initialization |
+| GET | `/api/tools` | Tool catalog |
+| POST | `/api/query` | Single-turn question |
+| POST | `/api/chat` | Multi-turn conversation |
 
-Single-turn question with tool execution and structured response.
-
-```json
-{
-  "question": "Find recent papers on neural scaling laws"
-}
-```
-
-Response includes `answer`, `tools_used`, `processing_time`, and extracted `structured` data (URLs, ArXiv IDs, authors).
-
-### `POST /api/chat`
-
-Multi-turn conversation with message history.
-
-```json
-{
-  "messages": [
-    { "role": "user", "content": "What is entropy?" }
-  ]
-}
-```
-
-### `GET /health`
-
-Returns service status and agent initialization state.
-
-Full API documentation: [`API_DOCS.md`](API_DOCS.md)
+See [API_DOCS.md](API_DOCS.md) for request and response schemas, curl examples, and client snippets.
 
 ---
 
 ## Deployment
 
-### Hugging Face Spaces (Docker SDK)
+### Hugging Face Spaces
 
-This Space runs via Docker. To deploy your own instance:
+Use the **Docker** SDK. Push this repository to your Space, set `GROQ_API_KEY` under **Settings → Secrets**, and allow the build to complete. See [README_HF.md](README_HF.md).
 
-1. Fork or clone this repository
-2. Create a new Space at [huggingface.co/spaces](https://huggingface.co/spaces) with **Docker** as the SDK
-3. Push the repository to the Space's git remote
-4. Add `GROQ_API_KEY` as a Secret in the Space settings (Settings → Secrets)
+### Cloud (AWS, GCP, Azure)
 
-The Space will build automatically and serve the FastAPI application.
-
-### Cloud Deployment (AWS / GCP / Azure)
-
-```bash
-# Build and push image
-docker build -t heisenberg-agent .
-docker tag heisenberg-agent your-registry/heisenberg-agent:latest
-docker push your-registry/heisenberg-agent:latest
-```
-
-Set the `GROQ_API_KEY` environment variable in your cloud provider's secrets manager or container configuration.
+Build the image, push to your registry, inject `GROQ_API_KEY` via the provider’s secret manager, and run the container behind your load balancer or ingress. See [DOCKER.md](DOCKER.md).
 
 ---
 
-## Project Structure
+## Project structure
 
 ```
 langchain-autonomous-agent/
-├── agent.py            # Agent logic, tools, and persona
-├── api.py              # FastAPI application and endpoints
-├── app.py              # Entry point (Uvicorn server)
-├── requirements.txt    # Python dependencies
-├── Dockerfile          # Container image definition
-├── docker-compose.yml  # Local orchestration
-├── API_DOCS.md         # Full API documentation
-└── README.md           # This file
+├── agent.py            # Agent logic, tools, system persona
+├── api.py              # FastAPI application
+├── app.py              # Uvicorn entry point
+├── requirements.txt
+├── Dockerfile
+├── docker-compose.yml
+├── LICENSE
+├── API_DOCS.md
+├── DOCKER.md
+├── README_HF.md
+├── SECURITY_FIX.md
+├── CHANGELOG.md
+└── README.md
 ```
+
+---
+
+## Security and operations
+
+- Do not commit API keys. Use `.env` locally (ignored by Git) and platform secrets in production.
+- The API ships with permissive CORS for development. Restrict `allow_origins` before public deployment.
+- No built-in authentication or rate limiting; add reverse proxies, API keys, or OAuth as required.
+
+See [SECURITY_FIX.md](SECURITY_FIX.md).
+
+---
+
+## Disclaimer
+
+The conversational persona is inspired by a fictional character from *Breaking Bad*. This software is an independent educational and research project. It is not affiliated with AMC Networks, Sony Pictures Television, or the creators of *Breaking Bad*. Users remain responsible for compliance with applicable law and third-party terms of service (Groq, Wikipedia, arXiv, search providers).
 
 ---
 
 ## License
 
-MIT — open for educational and research use.
+This project is licensed under the **MIT License**. See [LICENSE](LICENSE).
+
+---
+
+## Maintainer
+
+Sidnei Alves de Almeida

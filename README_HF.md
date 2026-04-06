@@ -1,69 +1,86 @@
-# 🔬 Scientific Research Agent - Hugging Face Spaces
+# Hugging Face Spaces — deployment notes
 
-This is a ready-to-deploy Gradio application for Hugging Face Spaces.
+This project is designed to run on [Hugging Face Spaces](https://huggingface.co/spaces) using the **Docker** SDK. The container serves a FastAPI application via Uvicorn (see `app.py` and `Dockerfile`).
 
-## Quick Deploy Guide
+---
 
-1. **Create a new Space**:
-   - Go to [Hugging Face Spaces](https://huggingface.co/spaces)
-   - Click "Create new Space"
-   - Name: `scientific-research-agent` (or your preferred name)
-   - SDK: **Gradio**
-   - Hardware: **CPU Basic** (free tier works fine)
+## Requirements
 
-2. **Upload Files**:
-   - Upload `app.py`
-   - Upload `agent.py`
-   - Upload `requirements.txt`
+- A Hugging Face account with permission to create Spaces
+- A Groq API key ([console.groq.com](https://console.groq.com))
 
-3. **Set Secret**:
-   - Go to Settings → Secrets
-   - Add a new secret:
-     - Key: `GROQ_API_KEY`
-     - Value: Your Groq API key (get it from [console.groq.com](https://console.groq.com))
+---
 
-4. **Deploy**:
-   - The Space will automatically build
-   - Wait for the build to complete (usually 2-5 minutes)
-   - Your app will be live!
+## Creating the Space
 
-## File Structure for HF Spaces
+1. Open [huggingface.co/new-space](https://huggingface.co/new-space).
+2. Choose a name and select **Docker** as the SDK.
+3. Create the Space from this repository (Git integration) or push the repository contents to the Space Git remote.
 
-```
-your-space/
-├── app.py            # Main Gradio app (required)
-├── agent.py          # Agent logic
-├── requirements.txt  # Dependencies
-└── README.md         # This file (optional but recommended)
-```
+---
 
-## Environment Variables
+## Secrets
 
-The app uses the `GROQ_API_KEY` environment variable, which you set through Hugging Face Spaces secrets. The code automatically reads it, so no `.env` file is needed.
+1. Open the Space **Settings** page.
+2. Under **Secrets and variables**, add:
 
-## Testing Locally
+| Name | Value |
+|------|--------|
+| `GROQ_API_KEY` | Your Groq API key |
 
-Before deploying, you can test locally:
+The application reads this variable at runtime; a local `.env` file is not required on the Space.
+
+---
+
+## Repository layout
+
+The Space repository should include at minimum:
+
+| File | Role |
+|------|------|
+| `Dockerfile` | Image build instructions |
+| `requirements.txt` | Python dependencies |
+| `app.py` | Uvicorn entry point |
+| `api.py` | FastAPI application |
+| `agent.py` | Agent and tools |
+| `README.md` | Space card metadata (YAML front matter supported) |
+
+---
+
+## Local verification
+
+Before pushing, validate locally:
 
 ```bash
-# Set your API key
 export GROQ_API_KEY="your_key_here"
-
-# Run the app
 python app.py
 ```
 
-Then visit `http://localhost:7860` in your browser.
+Visit `http://localhost:7860/docs`.
+
+---
+
+## Build and runtime
+
+- The Space builder runs `docker build` using the repository `Dockerfile`.
+- First startup may take several minutes while dependencies install.
+- LLM calls are subject to Groq rate limits and queueing; allow adequate request timeouts on clients.
+
+---
 
 ## Troubleshooting
 
-- **Build fails**: Check that all dependencies are in `requirements.txt`
-- **API key error**: Verify the secret is set correctly in Space settings
-- **Import errors**: Make sure `agent.py` is in the same directory as `app.py`
+| Issue | Action |
+|-------|--------|
+| Build fails | Confirm `requirements.txt` pins are installable; check build logs |
+| `GROQ_API_KEY` errors | Verify the secret name matches exactly and redeploy |
+| Import errors | Ensure `api.py` and `agent.py` sit beside `app.py` in the Space root |
+| Timeouts | Increase client timeout; Groq latency varies with load |
 
-## Notes
+---
 
-- The agent initializes once at startup for better performance
-- Responses may take 10-30 seconds depending on the complexity of the query
-- The app uses Groq's free tier, which has rate limits
+## Documentation
 
+- [README.md](README.md) — project overview
+- [API_DOCS.md](API_DOCS.md) — REST API reference
+- [DOCKER.md](DOCKER.md) — container operations
