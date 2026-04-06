@@ -17,6 +17,8 @@
 
 This project runs on [Hugging Face Spaces](https://huggingface.co/spaces) using the **Docker** SDK. The container serves a FastAPI application via Uvicorn (see `app.py` and `Dockerfile`).
 
+**Space card metadata** (title, emoji, colors, `sdk: docker`) can be set in the Space **Settings** UI, or by keeping a YAML front matter block in the **Space’s own** `README.md` when you maintain a fork— the main [GitHub README](https://github.com/sidnei-almeida/langchain-autonomous-agent) omits front matter for cleaner rendering on GitHub.
+
 ---
 
 ## Requirements

@@ -21,12 +21,8 @@ This document describes the HTTP API exposed by the FastAPI application (`api.py
 
 ## Base URLs
 
-| Environment | URL |
-|-------------|-----|
-| Local development | `http://localhost:7860` |
-| Hugging Face Spaces | `https://huggingface.co/spaces/salmeida/langchain-agent` (append paths as needed) |
-
-Replace the Space path if you deploy under a different namespace or name.
+- **Local development:** `http://localhost:7860`
+- **Hugging Face Spaces (example):** `https://huggingface.co/spaces/salmeida/langchain-agent` — append paths as needed; replace the namespace or Space name if yours differs.
 
 ---
 

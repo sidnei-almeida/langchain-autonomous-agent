@@ -1,14 +1,3 @@
----
-title: Heisenberg — Autonomous Scientific Agent
-emoji: ⚗️
-colorFrom: gray
-colorTo: indigo
-sdk: docker
-app_file: app.py
-pinned: false
-license: mit
----
-
 <!-- Optional: add a banner image at logos/long_logo.png and uncomment:
 <p align="center">
   <img src="logos/long_logo.png" alt="Heisenberg — Autonomous Scientific Agent" width="720" />
@@ -56,17 +45,15 @@ General-purpose chat models answer from parametric memory alone; **scientific an
 
 ## Quick links
 
-| Resource | URL |
-|----------|-----|
-| Repository | [sidnei-almeida/langchain-autonomous-agent](https://github.com/sidnei-almeida/langchain-autonomous-agent) |
-| License | [MIT](./LICENSE) |
-| API reference | [API_DOCS.md](./API_DOCS.md) |
-| Docker operations | [DOCKER.md](./DOCKER.md) |
-| Hugging Face Spaces | [README_HF.md](./README_HF.md) |
-| Security & secrets | [SECURITY_FIX.md](./SECURITY_FIX.md) |
-| Changelog | [CHANGELOG.md](./CHANGELOG.md) |
-| Live Space (example) | [salmeida/langchain-agent](https://huggingface.co/spaces/salmeida/langchain-agent) |
-| Groq console | [console.groq.com](https://console.groq.com) |
+- Repository: [sidnei-almeida/langchain-autonomous-agent](https://github.com/sidnei-almeida/langchain-autonomous-agent)
+- License: [MIT](./LICENSE)
+- API reference: [API_DOCS.md](./API_DOCS.md)
+- Docker: [DOCKER.md](./DOCKER.md)
+- Hugging Face Spaces: [README_HF.md](./README_HF.md)
+- Security: [SECURITY_FIX.md](./SECURITY_FIX.md)
+- Changelog: [CHANGELOG.md](./CHANGELOG.md)
+- Live Space (example): [salmeida/langchain-agent](https://huggingface.co/spaces/salmeida/langchain-agent)
+- Groq console: [console.groq.com](https://console.groq.com)
 
 ---
 
