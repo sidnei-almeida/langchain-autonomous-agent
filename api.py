@@ -241,18 +241,11 @@ async def query_agent(request: QueryRequest):
         )
         
         if not final_answer:
-            # Instead of raising an error, return a funny, friendly response
             return QueryResponse(
                 answer=(
-                    "Okay, so I'm scratching my head here because I couldn't quite nail down a complete "
-                    "answer for you. But hey, that's science for you - sometimes things don't work out perfectly!\n\n"
-                    "Here's the deal: I'm a scientific research agent, which means I'm your go-to guy for "
-                    "science, research, math, and all that nerdy stuff we love. If you're asking me about "
-                    "something that's way outside my wheelhouse, I might not be the best choice.\n\n"
-                    "But here's what I CAN do - I've got these amazing research tools (ArXiv, Wikipedia, "
-                    "web search, and a calculator that's probably doing calculus in its sleep). Ask me "
-                    "something science-related and let's see what kind of knowledge we can dig up together! "
-                    "Physics, chemistry, biology, math, computer science, recent discoveries - I'm all about it! 🔬"
+                    "No answer from the model that run. Ask something concrete — "
+                    "science, math, a paper search, or a calculation. "
+                    "Keep it short; I'll keep it shorter."
                 ),
                 question=request.question,
                 tools_used=None,
@@ -287,17 +280,10 @@ async def query_agent(request: QueryRequest):
         print(f"Error processing query: {str(e)}")
         print(f"Traceback: {error_trace}")
         
-        # Return a friendly, funny error response instead of crashing
         return QueryResponse(
             answer=(
-                "Alright, so here's the thing - I hit a little snag trying to process that question. "
-                "But don't worry, I'm still here and ready to help!\n\n"
-                "I'm a scientific research agent, which means I'm really good at science stuff - "
-                "physics, chemistry, math, research papers, all that good stuff. But if you're asking "
-                "me about something way outside my lane, I might not be your guy.\n\n"
-                "Try asking me something science-related and watch me work my magic with my research "
-                "tools. I've got ArXiv, Wikipedia, web search, and a calculator that's probably smarter "
-                "than most of us. Let's do this! 🔬✨"
+                "Something broke on the backend. Try again with a clear science or math question. "
+                "If it keeps failing, check logs — not my problem to guess."
             ),
             question=request.question,
             tools_used=None,
@@ -342,15 +328,11 @@ async def chat_with_agent(request: ChatRequest):
         )
         
         if not final_answer:
-            # Instead of raising an error, return a funny, friendly response
             return ChatResponse(
                 message=ChatMessage(
                     role="assistant",
                     content=(
-                        "Couldn't put together a complete response there. "
-                        "I'm a scientific research agent - great at physics, chemistry, biology, math, and research papers. "
-                        "If you're asking about something outside science, I might not be your best bet.\n\n"
-                        "Try asking me something science-related - that's where I shine! 🔬"
+                        "Empty response. Ask a science or math question — one thing at a time."
                     )
                 ),
                 tools_used=None,
@@ -384,20 +366,11 @@ async def chat_with_agent(request: ChatRequest):
         print(f"Error processing chat: {str(e)}")
         print(f"Traceback: {error_trace}")
         
-        # Return a friendly error response instead of crashing
-        # Get the last user message for context
-        last_user_message = next(
-            (msg.content for msg in reversed(request.messages) if msg.role == "user"),
-            "your question"
-        )
-        
         return ChatResponse(
             message=ChatMessage(
                 role="assistant",
                 content=(
-                    "Hit a bump processing that question. "
-                    "I'm a scientific research agent - great at science stuff, not so much at pop culture or random life questions.\n\n"
-                    "Try asking me something science-related - physics, chemistry, biology, math, recent discoveries. That's my jam! 🔬"
+                    "Request failed. Retry with a science or math question — or check server logs."
                 )
             ),
             tools_used=None,
