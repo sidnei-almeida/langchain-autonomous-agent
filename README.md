@@ -7,7 +7,7 @@ sdk: docker
 app_file: app.py
 app_port: 7860
 pinned: false
-short_description: "Scientific Q&A API — LangChain, Groq Llama 3.3, FastAPI, heuristic tools (web, Wikipedia, arXiv, calculator)."
+short_description: "Scientific Q&A API — LangChain, Groq, FastAPI."
 ---
 
 <!-- Optional: add a banner image at logos/long_logo.png and uncomment:
