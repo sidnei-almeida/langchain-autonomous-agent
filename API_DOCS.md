@@ -1,4 +1,19 @@
-# Heisenberg — REST API Reference
+<div align="center">
+
+## REST API reference
+
+**FastAPI · OpenAPI**
+
+*Heisenberg — Autonomous Scientific Agent*
+
+[![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0-6BA539.svg?logo=openapiinitiative)](https://swagger.io/specification/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+[**Repository**](https://github.com/sidnei-almeida/langchain-autonomous-agent) · Maintainer: [**@sidnei-almeida**](https://github.com/sidnei-almeida)
+
+</div>
+
+---
 
 This document describes the HTTP API exposed by the FastAPI application (`api.py`). For interactive exploration, use the OpenAPI UI at `/docs` on a running instance.
 

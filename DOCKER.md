@@ -1,4 +1,19 @@
-# Container deployment guide
+<div align="center">
+
+## Container deployment
+
+**Docker · Docker Compose**
+
+*Heisenberg — Autonomous Scientific Agent*
+
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED.svg?logo=docker&logoColor=white)](https://docs.docker.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+[**Repository**](https://github.com/sidnei-almeida/langchain-autonomous-agent) · Maintainer: [**@sidnei-almeida**](https://github.com/sidnei-almeida)
+
+</div>
+
+---
 
 This guide covers building and running the Heisenberg scientific agent with Docker and Docker Compose.
 

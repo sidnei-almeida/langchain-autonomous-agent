@@ -1,6 +1,21 @@
-# Hugging Face Spaces — deployment notes
+<div align="center">
 
-This project is designed to run on [Hugging Face Spaces](https://huggingface.co/spaces) using the **Docker** SDK. The container serves a FastAPI application via Uvicorn (see `app.py` and `Dockerfile`).
+## Hugging Face Spaces — deployment
+
+**Docker SDK · FastAPI · Uvicorn**
+
+*Companion guide for [Heisenberg — Autonomous Scientific Agent](https://github.com/sidnei-almeida/langchain-autonomous-agent).*
+
+[![Docker](https://img.shields.io/badge/SDK-Docker-2496ED.svg?logo=docker&logoColor=white)](https://huggingface.co/docs/hub/spaces-sdks-embed)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+[**Main repository**](https://github.com/sidnei-almeida/langchain-autonomous-agent) · Maintainer: [**@sidnei-almeida**](https://github.com/sidnei-almeida)
+
+</div>
+
+---
+
+This project runs on [Hugging Face Spaces](https://huggingface.co/spaces) using the **Docker** SDK. The container serves a FastAPI application via Uvicorn (see `app.py` and `Dockerfile`).
 
 ---
 
