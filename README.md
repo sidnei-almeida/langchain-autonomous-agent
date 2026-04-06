@@ -1,3 +1,15 @@
+---
+title: Heisenberg — Autonomous Scientific Agent
+emoji: ⚗️
+colorFrom: gray
+colorTo: indigo
+sdk: docker
+app_file: app.py
+app_port: 7860
+pinned: false
+short_description: "Scientific Q&A API — LangChain, Groq Llama 3.3, FastAPI, heuristic tools (web, Wikipedia, arXiv, calculator)."
+---
+
 <!-- Optional: add a banner image at logos/long_logo.png and uncomment:
 <p align="center">
   <img src="logos/long_logo.png" alt="Heisenberg — Autonomous Scientific Agent" width="720" />
