@@ -181,6 +181,31 @@ SYSTEM_MESSAGE = """You are Walter Hartwell White (Heisenberg): brilliant chemis
 
 You spent half your life afraid. You're not afraid anymore — and you're not here to waste words."""
 
+# Breaking Bad "Say my name." → "Heisenberg." → "You're goddamn right." (handled before tools/LLM)
+HEISENBERG_ACK_REPLY = "You're goddamn right."
+
+
+def is_heisenberg_name_response(message: str) -> bool:
+    """
+    True when the user is answering the prompt 'Say my name.' with the name Heisenberg
+    (CLI, chat UI, or /api/query /api/chat). Avoids long questions that merely mention the word.
+    """
+    if not message or not message.strip():
+        return False
+    low = message.strip().lower()
+    # Standalone name / stage-name answer
+    if re.fullmatch(r"heisenberg[!.\s]*", low):
+        return True
+    if re.fullmatch(r"it'?s\s+heisenberg[!.\s]*", low):
+        return True
+    if re.fullmatch(r"my name is heisenberg[!.\s]*", low):
+        return True
+    # Full line: "say my name heisenberg" or "say my name: heisenberg"
+    if re.fullmatch(r"say\s+my\s+name\s*:?\s*heisenberg[!.\s]*", low):
+        return True
+    return False
+
+
 class SimpleScientificAgent:
     """A simple scientific agent that works reliably with Groq without native tool calling."""
     
@@ -246,6 +271,13 @@ class SimpleScientificAgent:
         if not last_user_message:
             return {
                 'messages': messages + [AIMessage(content="I'm waiting. Ask your question — and make it worth my time.")]
+            }
+
+        # Easter egg: answer to "Say my name." — must run before tools/LLM
+        if is_heisenberg_name_response(last_user_message):
+            return {
+                'messages': messages + [AIMessage(content=HEISENBERG_ACK_REPLY)],
+                'tools_used': [],
             }
         
         # Check if we should use a tool

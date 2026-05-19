@@ -10,11 +10,9 @@ pinned: false
 short_description: "Scientific Q&A API — LangChain, Groq, FastAPI."
 ---
 
-<!-- Optional: add a banner image at logos/long_logo.png and uncomment:
 <p align="center">
-  <img src="logos/long_logo.png" alt="Heisenberg — Autonomous Scientific Agent" width="720" />
+  <img src="./images/header.png" alt="Heisenberg — Autonomous Scientific Agent banner" width="920" />
 </p>
--->
 
 <p align="center">
   <strong>LangChain · Groq (Llama 3.3 70B) · FastAPI · Uvicorn · Docker</strong><br />
@@ -47,11 +45,28 @@ short_description: "Scientific Q&A API — LangChain, Groq, FastAPI."
 
 **Heisenberg** (this repository) is a narrowly scoped **autonomous scientific assistant**: a FastAPI service and optional CLI that route user questions through **heuristic tool selection** (DuckDuckGo, Wikipedia, arXiv, a sandboxed calculator), inject retrieved context, and synthesize answers with **Groq’s Llama 3.3 70B** via LangChain. The design prioritizes **operational clarity**—the LLM does not call tools natively; the application layer decides when to search, summarize, or compute.
 
+### Why this pattern
+
+- **Predictable cost and latency** — One optional retrieval step per user turn avoids long agent loops unless you later opt into LangGraph-style graphs.
+- **Citation-friendly workflows** — arXiv + Wikipedia + web search ground answers when queries are scientific, historical, or “what’s new” in a field.
+- **Deterministic math** — Numeric tasks go through the calculator tool instead of asking the LLM to do brittle mental arithmetic.
+- **Same agent, multiple surfaces** — Identical core logic drives the **REST API**, **CLI**, and **Hugging Face Spaces** Docker image described in `README_HF.md`.
+
 ---
 
 ## Problem statement
 
 General-purpose chat models answer from parametric memory alone; **scientific and citation-heavy work** benefits from **retrieval** (papers, encyclopedia, current web) and **deterministic math**. This stack wires those capabilities behind a single REST contract so clients (web UIs, scripts, Spaces) can consume **structured responses** (`tools_used`, `processing_time`, and optional URL/author extraction) without re-implementing orchestration.
+
+---
+
+## Stack (visual)
+
+<p align="center">
+  <img src="./images/softwre.png" alt="Software stack overview: LangChain orchestration, Groq LLM, FastAPI, Docker, and supporting libraries" width="800" />
+</p>
+
+*Graphic above summarizes the main technologies and how they sit around the agent service (orchestration, API layer, container, external providers).*
 
 ---
 
@@ -99,6 +114,16 @@ flowchart LR
 
 **Data flow:** the last user message is classified; zero or one tool runs; its output is appended as context; the LLM generates the final reply.
 
+### Request lifecycle (step by step)
+
+1. **Ingress** — Client calls `POST /api/query` (single turn) or `POST /api/chat` (multi-turn history). Health checks hit `GET /health`; metadata at `GET /` and tool list at `GET /api/tools`.
+2. **Heuristic routing** — `SimpleScientificAgent` inspects the latest user string for keywords and intent cues, then selects **at most one** external capability for that turn: **DuckDuckGo**, **Wikipedia**, **arXiv** (via `arxiv` + LangChain tool wrappers), or the **calculator** — or skips tools for purely parametric answers.
+3. **Tool execution** — The chosen tool returns text (search snippets, encyclopedic extract, paper titles/abstracts/URLs, or a numeric result from the sandboxed `eval`-based calculator in `agent.py`).
+4. **Prompt assembly** — Retrieved text is prepended or concatenated as **context**; the **ChatGroq** stack applies the scientific system persona and produces the final **natural-language** answer.
+5. **Structured response** — `api.py` wraps the reply in JSON with **`tools_used`**, **`processing_time`**, and (where implemented) extracted URLs or bibliographic hints so clients do not have to parse raw chat only.
+
+This keeps **orchestration deterministic** in application code: the model is used for language and reasoning, not for arbitrary tool invocation loops.
+
 ---
 
 ## Tools (functional surface)
@@ -116,6 +141,7 @@ flowchart LR
 
 | Path | Role |
 |------|------|
+| `images/` | README assets (`header.png`, `softwre.png` stack graphic) |
 | `agent.py` | Agent class, tools, system persona, CLI |
 | `api.py` | FastAPI routes, models, structured extraction |
 | `app.py` | Uvicorn entry (`PORT`, default `7860`) |
