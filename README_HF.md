@@ -17,7 +17,7 @@
 
 This project runs on [Hugging Face Spaces](https://huggingface.co/spaces) using the **Docker** SDK. The container serves a FastAPI application via Uvicorn (see `app.py` and `Dockerfile`).
 
-**README front matter:** Hugging Face reads the YAML block at the **very top** of the root `README.md` ([Spaces config reference](https://huggingface.co/docs/hub/spaces-config-reference)). For this project, `sdk` must be `docker`, with `app_file: app.py` and `app_port: 7860` matching `app.py` / `Dockerfile`. Do not leave Mustache placeholders (`{{title}}`, etc.) — use real strings or the Space build will fail.
+**Space configuration:** The Docker app is defined by `Dockerfile`, `app.py`, and `app_port`/`PORT` (default **7860**). If the Space card no longer shows title/colors from Git, set **SDK, Dockerfile, and port** in the Space’s **Settings** tab on Hugging Face, or add a minimal YAML front matter block back to the **repository README used by that Space** only (see [Spaces config reference](https://huggingface.co/docs/hub/spaces-config-reference)).
 
 ---
 

@@ -1,15 +1,3 @@
----
-title: Heisenberg — Autonomous Scientific Agent
-emoji: ⚗️
-colorFrom: gray
-colorTo: indigo
-sdk: docker
-app_file: app.py
-app_port: 7860
-pinned: false
-short_description: "Scientific Q&A API — LangChain, Groq, FastAPI."
----
-
 <p align="center">
   <img src="./images/header.png" alt="Heisenberg — Autonomous Scientific Agent banner" width="920" />
 </p>
