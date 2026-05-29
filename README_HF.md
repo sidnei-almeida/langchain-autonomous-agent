@@ -1,103 +1,133 @@
-<div align="center">
+# Hugging Face Spaces — Gray Matter LABS
 
-## Hugging Face Spaces — deployment
-
-**Docker SDK · FastAPI · Uvicorn**
-
-*Companion guide for [Heisenberg — Autonomous Scientific Agent](https://github.com/sidnei-almeida/langchain-autonomous-agent).*
-
-[![Docker](https://img.shields.io/badge/SDK-Docker-2496ED.svg?logo=docker&logoColor=white)](https://huggingface.co/docs/hub/spaces-sdks-embed)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-
-[**Main repository**](https://github.com/sidnei-almeida/langchain-autonomous-agent) · Maintainer: [**@sidnei-almeida**](https://github.com/sidnei-almeida)
-
-</div>
+Deploy this repository as a **Docker Space** serving the FastAPI research agent on port **7860**.
 
 ---
 
-This project runs on [Hugging Face Spaces](https://huggingface.co/spaces) using the **Docker** SDK. The container serves a FastAPI application via Uvicorn (see `app.py` and `Dockerfile`).
+## 1. Create the Space
 
-**Space configuration:** The Docker app is defined by `Dockerfile`, `app.py`, and `app_port`/`PORT` (default **7860**). If the Space card no longer shows title/colors from Git, set **SDK, Dockerfile, and port** in the Space’s **Settings** tab on Hugging Face, or add a minimal YAML front matter block back to the **repository README used by that Space** only (see [Spaces config reference](https://huggingface.co/docs/hub/spaces-config-reference)).
+1. Go to [huggingface.co/new-space](https://huggingface.co/new-space).
+2. **Space name** — e.g. `gray-matter-labs` or your org slug.
+3. **SDK** — select **Docker** (not Gradio/Streamlit).
+4. **Repository** — link this GitHub repo, or push files to the Space Git remote.
 
----
+The Space reads configuration from **`README.md` front matter** at the repo root:
 
-## Requirements
+```yaml
+sdk: docker
+app_port: 7860
+```
 
-- A Hugging Face account with permission to create Spaces
-- A Groq API key ([console.groq.com](https://console.groq.com))
-
----
-
-## Creating the Space
-
-1. Open [huggingface.co/new-space](https://huggingface.co/new-space).
-2. Choose a name and select **Docker** as the SDK.
-3. Create the Space from this repository (Git integration) or push the repository contents to the Space Git remote.
+If the card does not update after push, open **Settings** and confirm **SDK = Docker** and **App port = 7860**.
 
 ---
 
-## Secrets
-
-1. Open the Space **Settings** page.
-2. Under **Secrets and variables**, add:
+## 2. Secret (required)
 
 | Name | Value |
 |------|--------|
-| `GROQ_API_KEY` | Your Groq API key |
+| `GROQ_API_KEY` | Your key from [console.groq.com](https://console.groq.com) |
 
-The application reads this variable at runtime; a local `.env` file is not required on the Space.
+**Settings → Secrets and variables → New secret**
 
----
-
-## Repository layout
-
-The Space repository should include at minimum:
-
-| File | Role |
-|------|------|
-| `Dockerfile` | Image build instructions |
-| `requirements.txt` | Python dependencies |
-| `app.py` | Uvicorn entry point |
-| `api.py` | FastAPI application |
-| `agent.py` | Agent and tools |
-| `README.md` | Space card metadata (YAML front matter supported) |
+The app calls `load_dotenv()` but Spaces inject secrets as environment variables — no `.env` file is needed on the hub.
 
 ---
 
-## Local verification
+## 3. Files the builder must include
 
-Before pushing, validate locally:
+| File | Purpose |
+|------|---------|
+| `Dockerfile` | Image build |
+| `requirements.txt` | Python deps |
+| `app.py` | Uvicorn entry (`PORT` from Space) |
+| `api.py` | FastAPI app |
+| `agent.py` | Agent + Groq + tools |
+| `arxiv_search.py` | Ranked arXiv search |
+| `README.md` | Space card + `sdk` / `app_port` metadata |
+
+Do **not** commit `.env` or API keys.
+
+---
+
+## 4. Build & runtime
+
+- HF runs `docker build` from `Dockerfile`.
+- First build may take several minutes (`gcc` for some wheels).
+- Default route: Space URL → API root; use **`/docs`** for Swagger UI.
+- Health: `GET /health`
+
+**Example request** (from browser or `curl`):
 
 ```bash
-export GROQ_API_KEY="your_key_here"
-python app.py
+curl -X POST "https://YOUR_USER-YOUR_SPACE.hf.space/api/query" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "find papers about human-computer interaction"}'
 ```
 
-Visit `http://localhost:7860/docs`.
+---
+
+## 5. Connect frontend (Gray Matter UI)
+
+Point the frontend API base URL to the Space URL (no trailing slash):
+
+```text
+https://YOUR_USER-YOUR_SPACE.hf.space
+```
+
+Endpoints:
+
+- `POST /api/query` — single turn
+- `POST /api/chat` — history (`messages[]` with `user` / `assistant` only)
+
+The backend filters UI mock messages and ranks arXiv results server-side.
 
 ---
 
-## Build and runtime
+## 6. Local check before push
 
-- The Space builder runs `docker build` using the repository `Dockerfile`.
-- First startup may take several minutes while dependencies install.
-- LLM calls are subject to Groq rate limits and queueing; allow adequate request timeouts on clients.
+```bash
+export GROQ_API_KEY="your_key"
+pip install -r requirements.txt
+python app.py
+# http://localhost:7860/docs
+```
+
+Or Docker:
+
+```bash
+docker build -t gray-matter-labs .
+docker run -p 7860:7860 -e GROQ_API_KEY=your_key gray-matter-labs
+```
 
 ---
 
-## Troubleshooting
+## 7. Troubleshooting
 
-| Issue | Action |
-|-------|--------|
-| Build fails | Confirm `requirements.txt` pins are installable; check build logs |
-| `GROQ_API_KEY` errors | Verify the secret name matches exactly and redeploy |
-| Import errors | Ensure `api.py` and `agent.py` sit beside `app.py` in the Space root |
-| Timeouts | Increase client timeout; Groq latency varies with load |
+| Issue | Fix |
+|-------|-----|
+| Build fails | Check build logs; verify `requirements.txt` installs on Python 3.11 |
+| `GROQ_API_KEY not found` | Secret name must be exact; redeploy after adding |
+| 502 / starting | Wait for cold start; check `/health` |
+| Import error `arxiv_search` | Ensure `arxiv_search.py` is in repo root (included in `Dockerfile` COPY) |
+| Wrong SDK | Space Settings → SDK **Docker**, not Gradio |
+| Timeouts | arXiv fetch can take ~6–10s; increase client timeout |
+| Empty paper list | Query may be ambiguous — API returns clarification instead of weak papers |
 
 ---
 
-## Documentation
+## 8. Updating an existing Space
 
-- [README.md](README.md) — project overview
-- [API_DOCS.md](API_DOCS.md) — REST API reference
-- [DOCKER.md](DOCKER.md) — container operations
+1. Push to the connected branch (usually `main`).
+2. HF rebuilds automatically.
+3. Confirm **Secrets** still present after fork/duplicate.
+
+---
+
+## Related docs
+
+- [README.md](./README.md) — project overview + HF front matter
+- [API_DOCS.md](./API_DOCS.md) — REST schemas
+- [DOCKER.md](./DOCKER.md) — generic Docker notes
+
+**Maintainer:** [@sidnei-almeida](https://github.com/sidnei-almeida)

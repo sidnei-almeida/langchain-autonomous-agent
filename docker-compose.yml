@@ -1,15 +1,16 @@
 version: '3.8'
 
 services:
-  scientific-agent:
+  gray-matter-labs:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: scientific-research-agent
+    container_name: gray-matter-labs-api
     ports:
       - "7860:7860"
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
+      - PORT=7860
     env_file:
       - .env
     volumes:
@@ -18,7 +19,7 @@ services:
       # - ./app.py:/app/app.py
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:7860')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7860/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3

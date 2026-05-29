@@ -7,38 +7,33 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-
-# Virtual environments
 venv/
 env/
 ENV/
 
-# IDE
+# IDE / OS
 .vscode/
 .idea/
 *.swp
-*.swo
-*~
+.DS_Store
+*.log
 
-# Environment files
+# Secrets
 .env
-.env.local
-.env.*.local
+.env.*
 
 # Git
 .git/
 .gitignore
+.gitattributes
 
-# Documentation
+# Docs (not needed in image; README.md not copied anyway)
 *.md
-!README.md
 
-# Docker
-Dockerfile
+# Tests & scripts
+test_*.py
+scripts/
+
+# Docker meta (compose not needed inside image)
 docker-compose.yml
 .dockerignore
-
-# Other
-.DS_Store
-*.log
-

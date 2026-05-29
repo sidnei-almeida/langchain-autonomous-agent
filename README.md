@@ -1,189 +1,95 @@
-<p align="center">
-  <img src="./images/header.png" alt="Heisenberg — Autonomous Scientific Agent banner" width="920" />
-</p>
+---
+title: Gray Matter LABS
+emoji: ⚗️
+colorFrom: gray
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+short_description: Research API — ranked arXiv, Groq Llama 3.3, Wikipedia, web search
+tags:
+  - langchain
+  - groq
+  - fastapi
+  - arxiv
+  - scientific-research
+  - agent
+---
 
-<p align="center">
-  <strong>LangChain · Groq (Llama 3.3 70B) · FastAPI · Uvicorn · Docker</strong><br />
-  <em>Autonomous scientific Q&A with heuristic tool routing, structured API responses, and optional CLI.</em>
-</p>
+# Gray Matter LABS — Research Agent
 
-<p align="center">
-  <a href="https://github.com/sidnei-almeida/langchain-autonomous-agent"><strong>github.com/sidnei-almeida/langchain-autonomous-agent</strong></a>
-</p>
+**LangChain · Groq (Llama 3.3 70B) · FastAPI · Docker · Hugging Face Spaces**
 
-<p align="center">
-  Maintainer: <a href="https://github.com/sidnei-almeida">@sidnei-almeida</a>
-</p>
+Autonomous scientific Q&A API with **ranked arXiv search**, factual guardrails, and heuristic tool routing (DuckDuckGo, Wikipedia, calculator).
 
-<p align="center">
-  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg" /></a>
-  <a href="https://www.python.org/"><img alt="Python" src="https://img.shields.io/badge/Python-3.11+-3776AB.svg?logo=python&logoColor=white" /></a>
-  <a href="https://fastapi.tiangolo.com/"><img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-REST-009688.svg?logo=fastapi&logoColor=white" /></a>
-  <a href="https://docs.docker.com/"><img alt="Docker" src="https://img.shields.io/badge/Docker-ready-2496ED.svg?logo=docker&logoColor=white" /></a>
-  <a href="https://huggingface.co/spaces/salmeida/langchain-agent"><img alt="Hugging Face Spaces" src="https://img.shields.io/badge/Hugging%20Face-Spaces-yellow.svg?logo=huggingface" /></a>
-</p>
-
-<p align="center">
-  <strong>The agent does not approximate. It calculates.</strong>
-</p>
+| | |
+|---|---|
+| **Live API (Space)** | Open this Space → `/docs` for Swagger |
+| **GitHub** | [sidnei-almeida/langchain-autonomous-agent](https://github.com/sidnei-almeida/langchain-autonomous-agent) |
+| **HF deploy guide** | [README_HF.md](./README_HF.md) |
+| **Groq key** | [console.groq.com](https://console.groq.com) |
 
 ---
 
-## Executive summary
+## Hugging Face Spaces (quick start)
 
-**Heisenberg** (this repository) is a narrowly scoped **autonomous scientific assistant**: a FastAPI service and optional CLI that route user questions through **heuristic tool selection** (DuckDuckGo, Wikipedia, arXiv, a sandboxed calculator), inject retrieved context, and synthesize answers with **Groq’s Llama 3.3 70B** via LangChain. The design prioritizes **operational clarity**—the LLM does not call tools natively; the application layer decides when to search, summarize, or compute.
+1. **Create Space** → SDK: **Docker** → connect this repository (or push to the Space Git remote).
+2. **Settings → Secrets** → add `GROQ_API_KEY` (required).
+3. Wait for the Docker build; open **`/docs`** (port **7860** is set via `app_port` in this README front matter).
+4. Test: `POST /api/query` with `{"question": "find papers about human-computer interaction"}`.
 
-### Why this pattern
-
-- **Predictable cost and latency** — One optional retrieval step per user turn avoids long agent loops unless you later opt into LangGraph-style graphs.
-- **Citation-friendly workflows** — arXiv + Wikipedia + web search ground answers when queries are scientific, historical, or “what’s new” in a field.
-- **Deterministic math** — Numeric tasks go through the calculator tool instead of asking the LLM to do brittle mental arithmetic.
-- **Same agent, multiple surfaces** — Identical core logic drives the **REST API**, **CLI**, and **Hugging Face Spaces** Docker image described in `README_HF.md`.
+Full checklist: [README_HF.md](./README_HF.md).
 
 ---
 
-## Problem statement
+## What it does
 
-General-purpose chat models answer from parametric memory alone; **scientific and citation-heavy work** benefits from **retrieval** (papers, encyclopedia, current web) and **deterministic math**. This stack wires those capabilities behind a single REST contract so clients (web UIs, scripts, Spaces) can consume **structured responses** (`tools_used`, `processing_time`, and optional URL/author extraction) without re-implementing orchestration.
-
----
-
-## Stack (visual)
-
-<p align="center">
-  <img src="./images/softwre.png" alt="Software stack overview: LangChain orchestration, Groq LLM, FastAPI, Docker, and supporting libraries" width="800" />
-</p>
-
-*Graphic above summarizes the main technologies and how they sit around the agent service (orchestration, API layer, container, external providers).*
-
----
-
-## Quick links
-
-- Repository: [sidnei-almeida/langchain-autonomous-agent](https://github.com/sidnei-almeida/langchain-autonomous-agent)
-- License: [MIT](./LICENSE)
-- API reference: [API_DOCS.md](./API_DOCS.md)
-- Docker: [DOCKER.md](./DOCKER.md)
-- Hugging Face Spaces: [README_HF.md](./README_HF.md)
-- Security: [SECURITY_FIX.md](./SECURITY_FIX.md)
-- Changelog: [CHANGELOG.md](./CHANGELOG.md)
-- Live Space (example): [salmeida/langchain-agent](https://huggingface.co/spaces/salmeida/langchain-agent)
-- Groq console: [console.groq.com](https://console.groq.com)
-
----
-
-## Scope & guarantees
-
-| Dimension | Detail |
-|-----------|--------|
-| **Runtime** | Python **3.11+** (see `Dockerfile` / `requirements.txt`) |
-| **API** | **FastAPI** + **Uvicorn**; OpenAPI at `/docs` |
-| **LLM** | **Groq** `llama-3.3-70b-versatile` (configurable in `agent.py`) |
-| **Tool routing** | Keyword heuristics in `SimpleScientificAgent` — not native LLM tool-calling |
-| **Network** | Outbound calls to Groq, DuckDuckGo, Wikipedia, arXiv as configured |
-| **Secrets** | `GROQ_API_KEY` via `.env` (local) or platform secrets (Docker, HF Spaces) |
-
----
-
-## Architecture (high level)
+- **Gray Matter** persona — dry, precise lab tone; **not** a source of truth (no roleplay-as-fact).
+- **arXiv pipeline** (`arxiv_search.py`) — ambiguity detection, query expansion, relevance scoring, no weak first-result dumps.
+- **Groq** synthesis with low temperature (`0.2`) and conversation history limits.
+- **REST API** — `/api/query`, `/api/chat`, `/health`, OpenAPI at `/docs`.
 
 ```mermaid
 flowchart LR
-  U[Client or CLI] --> API[FastAPI]
-  API --> A[SimpleScientificAgent]
-  A --> R[Heuristic router]
-  R --> T[Tools]
-  R --> L[ChatGroq]
-  T --> A
-  L --> A
-  A --> API
+  U[Client] --> API[FastAPI]
+  API --> A[Agent]
+  A --> R[Router]
+  R --> ArXiv[Ranked arXiv]
+  R --> Other[Wikipedia / Web / Calc]
+  R --> G[Groq]
+  ArXiv --> G
+  Other --> G
+  G --> API
   API --> U
 ```
 
-**Data flow:** the last user message is classified; zero or one tool runs; its output is appended as context; the LLM generates the final reply.
-
-### Request lifecycle (step by step)
-
-1. **Ingress** — Client calls `POST /api/query` (single turn) or `POST /api/chat` (multi-turn history). Health checks hit `GET /health`; metadata at `GET /` and tool list at `GET /api/tools`.
-2. **Heuristic routing** — `SimpleScientificAgent` inspects the latest user string for keywords and intent cues, then selects **at most one** external capability for that turn: **DuckDuckGo**, **Wikipedia**, **arXiv** (via `arxiv` + LangChain tool wrappers), or the **calculator** — or skips tools for purely parametric answers.
-3. **Tool execution** — The chosen tool returns text (search snippets, encyclopedic extract, paper titles/abstracts/URLs, or a numeric result from the sandboxed `eval`-based calculator in `agent.py`).
-4. **Prompt assembly** — Retrieved text is prepended or concatenated as **context**; the **ChatGroq** stack applies the scientific system persona and produces the final **natural-language** answer.
-5. **Structured response** — `api.py` wraps the reply in JSON with **`tools_used`**, **`processing_time`**, and (where implemented) extracted URLs or bibliographic hints so clients do not have to parse raw chat only.
-
-This keeps **orchestration deterministic** in application code: the model is used for language and reasoning, not for arbitrary tool invocation loops.
-
 ---
 
-## Tools (functional surface)
+## Tools
 
 | Tool | Role |
 |------|------|
-| **DuckDuckGo Search** | Recent web, news, general lookup |
-| **Wikipedia** | Encyclopedic definitions and background |
-| **ArXiv** | Paper metadata, abstracts, PDF links |
-| **Scientific calculator** | `eval`-restricted math (`agent.py`) |
+| **ArXiv** | Ranked papers (up to 12 candidates, score ≥ 6, clarification if vague) |
+| **DuckDuckGo** | Recent web / news |
+| **Wikipedia** | Encyclopedic background |
+| **Calculator** | Sandboxed math |
 
 ---
 
-## Repository layout
-
-| Path | Role |
-|------|------|
-| `images/` | README assets (`header.png`, `softwre.png` stack graphic) |
-| `agent.py` | Agent class, tools, system persona, CLI |
-| `api.py` | FastAPI routes, models, structured extraction |
-| `app.py` | Uvicorn entry (`PORT`, default `7860`) |
-| `requirements.txt` | Python dependencies |
-| `Dockerfile` / `docker-compose.yml` | Container image and local run |
-| `LICENSE` | MIT full text |
-| `API_DOCS.md` | REST specification |
-| `DOCKER.md` | Build and cloud notes |
-| `README_HF.md` | Hugging Face Spaces |
-| `SECURITY_FIX.md` | Credential hygiene |
-| `CHANGELOG.md` | Version history |
-
----
-
-## Installation (development)
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/sidnei-almeida/langchain-autonomous-agent.git
-   cd langchain-autonomous-agent
-   ```
-2. Create and activate a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # Windows: venv\Scripts\activate
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Create `.env` with your Groq key:
-   ```bash
-   echo "GROQ_API_KEY=your_key_here" > .env
-   ```
-
----
-
-## Usage
-
-**REST API (default)**
+## Local development
 
 ```bash
+git clone https://github.com/sidnei-almeida/langchain-autonomous-agent.git
+cd langchain-autonomous-agent
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+echo "GROQ_API_KEY=your_key_here" > .env
 python app.py
 ```
 
-- Base URL: `http://localhost:7860`
-- Interactive docs: `http://localhost:7860/docs`
-
-**CLI**
-
-```bash
-python agent.py
-python agent.py "What are the latest advances in quantum computing?"
-```
+- API: `http://localhost:7860`
+- Docs: `http://localhost:7860/docs`
 
 **Docker**
 
@@ -191,79 +97,74 @@ python agent.py "What are the latest advances in quantum computing?"
 docker compose up --build
 ```
 
-See [DOCKER.md](./DOCKER.md) for production-oriented options.
-
 ---
 
 ## Configuration
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `GROQ_API_KEY` | Yes | Groq API key ([console.groq.com](https://console.groq.com)) |
-| `PORT` | No | HTTP port (default `7860`, used by `app.py`) |
-
-Model name, temperature, and `max_tokens` are set in `create_scientific_agent()` inside `agent.py`.
+| `GROQ_API_KEY` | Yes | Groq API key (Space **Secrets** or `.env` locally) |
+| `PORT` | No | HTTP port (default **7860**; HF sets this from `app_port`) |
 
 ---
 
-## API summary
+## API endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/` | Service metadata |
-| GET | `/health` | Liveness and agent init |
-| GET | `/api/tools` | Tool catalog |
-| POST | `/api/query` | Single-turn question |
-| POST | `/api/chat` | Multi-turn messages |
+| GET | `/` | Metadata |
+| GET | `/health` | Liveness |
+| GET | `/api/tools` | Tool list |
+| POST | `/api/query` | Single question |
+| POST | `/api/chat` | Multi-turn chat |
 
-Full schemas: [API_DOCS.md](./API_DOCS.md).
-
----
-
-## Known limitations
-
-- **Heuristic routing** may misclassify intent; ambiguous queries may not trigger the intended tool.
-- **Calculator** uses a restricted `eval`; treat as a utility, not a security boundary for untrusted multi-tenant input without additional hardening.
-- **CORS** is permissive (`*`) in the reference `api.py` — tighten before public exposure.
-- **No built-in authentication or rate limiting** — add at the edge (API gateway, reverse proxy).
-- **Third-party TOS** — Groq, Wikipedia, arXiv, and search providers impose their own limits and policies.
+Details: [API_DOCS.md](./API_DOCS.md).
 
 ---
 
-## Privacy & security posture
+## Repository layout
 
-- No first-party analytics or telemetry are embedded in this repository.
-- API keys must not be committed; use `.gitignore` and platform secrets.
-- Review `api.py` CORS and `agent.py` tool behavior for your deployment threat model.
-- Authoritative guidance: [SECURITY_FIX.md](./SECURITY_FIX.md).
-
----
-
-## Disclaimer & trademark note
-
-The conversational persona is **inspired by a fictional character** from *Breaking Bad*. This is an **independent** educational and research project. It is **not affiliated with** AMC Networks, Sony Pictures Television, or the creators of *Breaking Bad*. *Breaking Bad* is a trademark of its respective owners.
-
-Users are responsible for compliance with applicable law and with third-party terms (Groq, data providers, search APIs).
+| Path | Role |
+|------|------|
+| `agent.py` | Agent, Groq, tools, system prompt |
+| `arxiv_search.py` | arXiv ranking & clarification |
+| `api.py` | FastAPI routes |
+| `app.py` | Uvicorn entry (`PORT`) |
+| `Dockerfile` | HF Spaces / Docker image |
+| `requirements.txt` | Dependencies |
+| `README_HF.md` | Spaces deployment |
+| `API_DOCS.md` | REST reference |
 
 ---
 
-## Roadmap *(non-binding)*
+## Space build files (required on HF)
 
-- Optional native tool-calling / LangGraph path behind a feature flag.
-- Stricter CORS and optional API-key middleware for production templates.
+The Docker image copies at minimum:
+
+- `Dockerfile`
+- `requirements.txt`
+- `app.py`, `api.py`, `agent.py`, `arxiv_search.py`
+- `README.md` (this file — YAML front matter configures the Space card)
+
+---
+
+## Limitations
+
+- Heuristic routing (not native LLM tool-calling).
+- Permissive CORS (`*`) — tighten for production.
+- No built-in auth or rate limits.
+- Outbound network to Groq, arXiv, Wikipedia, DuckDuckGo.
+
+---
+
+## Disclaimer
+
+Persona inspired by a *Breaking Bad* archetype for **tone only** — independent project, not affiliated with rights holders. Users must comply with third-party terms (Groq, arXiv, etc.).
 
 ---
 
 ## License
 
-This project is licensed under the **MIT License**.
+MIT — see [LICENSE](./LICENSE).
 
-- License file in this repository: [`LICENSE`](./LICENSE)
-- SPDX identifier: `MIT`
-- Standard text reference: [opensource.org/licenses/MIT](https://opensource.org/licenses/MIT)
-
----
-
-## Maintainer
-
-**Sidnei Alves de Almeida** — [@sidnei-almeida](https://github.com/sidnei-almeida)
+**Maintainer:** [@sidnei-almeida](https://github.com/sidnei-almeida)

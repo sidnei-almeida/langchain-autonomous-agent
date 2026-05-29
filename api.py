@@ -1,5 +1,5 @@
 """
-FastAPI REST API for Scientific Research Agent
+FastAPI REST API for Gray Matter LABS Research Agent
 """
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,16 +12,19 @@ import shutil
 from pathlib import Path
 from dotenv import load_dotenv
 from agent import create_scientific_agent, prepare_messages
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 # Load environment variables
 load_dotenv()
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Scientific Research Agent API",
-    description="An autonomous AI agent specialized in scientific research with access to multiple tools",
-    version="1.0.0",
+    title="Gray Matter LABS — Research Agent API",
+    description=(
+        "Scientific research API with ranked arXiv search, Groq (Llama 3.3 70B), "
+        "and tools: DuckDuckGo, Wikipedia, calculator."
+    ),
+    version="2.0.0",
 )
 
 # CORS middleware
@@ -145,9 +148,9 @@ def extract_structured_data(text: str) -> Optional[StructuredResponse]:
 async def root():
     """Root endpoint with API information."""
     return {
-        "name": "Scientific Research Agent API",
-        "version": "1.0.0",
-        "description": "An autonomous AI agent specialized in scientific research",
+        "name": "Gray Matter LABS — Research Agent API",
+        "version": "2.0.0",
+        "description": "Scientific research agent with ranked arXiv search and Groq synthesis",
         "endpoints": {
             "health": "/health",
             "query": "/api/query",
@@ -304,17 +307,14 @@ async def chat_with_agent(request: ChatRequest):
     try:
         agent = get_agent()
         
-        # Convert messages to LangChain message objects
+        # Convert messages to LangChain message objects (user/assistant only)
         agent_messages = []
         for msg in request.messages:
             if msg.role == "user":
                 agent_messages.append(HumanMessage(content=msg.content))
             elif msg.role == "assistant":
                 agent_messages.append(AIMessage(content=msg.content))
-            elif msg.role == "system":
-                agent_messages.append(SystemMessage(content=msg.content))
-        
-        # Prepare messages with system message if not already present
+
         agent_messages = prepare_messages(agent_messages)
         
         # Invoke the agent with full conversation history

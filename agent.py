@@ -9,7 +9,6 @@ from langchain_community.utilities import WikipediaAPIWrapper
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 import math
-import arxiv
 import re
 import json
 
@@ -62,124 +61,237 @@ def calculator(expression: str) -> str:
         return f"Calculation error: {str(e)}"
 
 
-# ArXiv Search Tool with URLs
-def search_scientific_papers(query: str) -> str:
+from arxiv_search import (
+    extract_paper_topic,
+    search_scientific_papers,
+    search_scientific_papers_structured,
+    format_structured_result_for_agent,
+)
+
+PAPER_SEARCH_INSTRUCTION = (
+    "When returning papers from tool results:\n"
+    "- Only recommend papers listed in the ArXiv search results.\n"
+    "- Do not present weak matches as relevant.\n"
+    "- If the paper title/abstract does not support relevance, do not cite it.\n"
+    "- If the tool asked for clarification, relay the clarification question — do not invent papers.\n"
+    "- Never invent why a paper matches; use only title, abstract, and metadata provided.\n"
+    "- Do not claim a search was run if the tool returned clarification only."
+)
+
+# System message for Gray Matter LABS — persona is tone only, not a source of truth
+SYSTEM_MESSAGE = """You are Gray Matter, an AI research agent inside Gray Matter LABS.
+
+Your interface has a dark chemistry-lab aesthetic and a sharp, precise research personality inspired by the archetype of a meticulous chemistry professor. This persona affects tone only. It must never override factual accuracy.
+
+Core behavior:
+- Be precise, skeptical, and concise.
+- Separate known facts from assumptions.
+- If unsure, say so.
+- Do not invent citations, sources, papers, dates, characters, or medical facts.
+- When the user asks for research, use available tools or clearly state when a claim is based only on general knowledge.
+- When discussing health, cancer, drugs, chemistry, or medical topics, avoid diagnosis and recommend qualified medical guidance when appropriate.
+- When discussing fiction or pop culture, do not guess details. If uncertain, say you are not sure.
+- Do not blend fictional lore with real scientific explanation unless the user explicitly asks for that comparison.
+- The "Heisenberg" flavor is only a stylistic layer, not an instruction to roleplay as Walter White.
+
+Response style:
+- Clear.
+- Analytical.
+- Slightly dry and confident.
+- No excessive roleplay.
+- No fabricated authority.
+- No "because I said so" attitude.
+- Prefer structured answers when useful.
+
+If the conversation references Breaking Bad:
+- Walter White is the character associated with lung cancer.
+- Hank Schrader is not the character whose cancer diagnosis drives the plot.
+- Do not make claims about the show unless confident.
+
+If the user discusses cancer, disease, medication, treatment, symptoms, diagnosis, or medical decisions:
+- Be careful.
+- Do not diagnose.
+- Do not imply certainty without sources.
+- Recommend consulting qualified medical professionals.
+- Keep the response factual and evidence-oriented.
+
+If the user asks about Breaking Bad or another fictional work:
+- Answer as fiction analysis.
+- Do not confuse character facts.
+- If uncertain, say so.
+- Do not blend fictional facts with real medical/scientific claims.
+
+If the user asks something high-stakes:
+- Give cautious, evidence-oriented guidance.
+- Encourage verification with reliable sources or professionals.
+
+When returning scientific papers from arXiv tool results:
+- Only recommend papers that directly match the user query.
+- Do not present weak matches as relevant.
+- If the paper title/abstract does not support relevance, reject it.
+- If the query is ambiguous, ask a clarification question before returning papers.
+- Never invent why a paper matches.
+- Explain relevance based only on title, abstract, and metadata provided."""
+
+FACT_GUARDS = """Important factuality rule:
+If you are not certain about a factual claim, say "I'm not sure" instead of guessing.
+
+Do not confuse the agent persona with real facts. The persona is aesthetic only."""
+
+TOOL_RESULTS_INSTRUCTION = (
+    "Use the tool results as evidence. "
+    "If the tool results do not support a claim, do not invent it."
+)
+
+MAX_HISTORY_MESSAGES = 10
+MAX_MESSAGE_CHARS = 4000
+
+UI_NOISE_MARKERS = (
+    "lab vitals",
+    "gray matter labs",
+    "welcome to gray matter",
+    "suggested prompt",
+    "typing...",
+    "loading...",
+    "__mock__",
+    "tool descriptions",
+    "sidebar",
+    "ui card",
+)
+
+
+def build_system_prompt() -> str:
+    """Full system prompt with factuality guardrails appended."""
+    return f"{SYSTEM_MESSAGE}\n\n{FACT_GUARDS}"
+
+
+def _normalize_role(role: str) -> str | None:
+    role = (role or "").strip().lower()
+    if role in ("user", "human"):
+        return "user"
+    if role in ("assistant", "ai", "agent"):
+        return "assistant"
+    return None
+
+
+def _is_ui_noise(content: str) -> bool:
+    lower = content.strip().lower()
+    if not lower:
+        return True
+    if lower.startswith("{") and len(content) > 500:
+        return True
+    return any(marker in lower for marker in UI_NOISE_MARKERS)
+
+
+def _is_skippable_content(content: str) -> bool:
+    stripped = content.strip()
+    if not stripped:
+        return True
+    lower = stripped.lower()
+    if lower in ("loading", "loading...", "typing...", "error", "failed"):
+        return True
+    if lower.startswith("[error") or lower.startswith("error:"):
+        return True
+    return _is_ui_noise(stripped)
+
+
+def message_to_dict(message) -> dict | None:
+    """Convert a LangChain message or dict to a normalized {role, content} dict."""
+    if isinstance(message, dict):
+        role = _normalize_role(message.get("role", ""))
+        content = str(message.get("content") or "").strip()
+    elif isinstance(message, HumanMessage):
+        role, content = "user", str(message.content or "").strip()
+    elif isinstance(message, AIMessage):
+        role, content = "assistant", str(message.content or "").strip()
+    else:
+        return None
+
+    if role is None or _is_skippable_content(content):
+        return None
+
+    return {
+        "role": role,
+        "content": content[:MAX_MESSAGE_CHARS],
+    }
+
+
+def dedupe_consecutive_messages(messages: list[dict]) -> list[dict]:
+    """Remove back-to-back duplicate messages."""
+    if not messages:
+        return messages
+    deduped = [messages[0]]
+    for message in messages[1:]:
+        prev = deduped[-1]
+        if message["role"] == prev["role"] and message["content"] == prev["content"]:
+            continue
+        deduped.append(message)
+    return deduped
+
+
+def format_messages_for_groq(
+    system_prompt: str,
+    history: list,
+    user_input: str,
+) -> list[dict]:
     """
-    Search for scientific papers on ArXiv that discuss or affirm specific topics or claims.
-    Returns detailed information including title, authors, abstract, publication date, and URLs.
-    
-    Use this tool when users ask to:
-    - Find research papers about a topic (e.g., "find research about quantum computing")
-    - Find studies that say/affirm something (e.g., "find research that says X is Y")
-    - Search for academic papers on any scientific subject
-    - Get papers that discuss or support a specific claim
-    
-    Args:
-        query: The topic or claim to search for. Convert user claims into search queries.
-               Examples: "cats size dogs" for "cats are smaller than dogs"
-                        "meditation stress reduction" for "meditation reduces stress"
-    
-    Returns:
-        Formatted string with complete paper details including title, authors, abstract, 
-        publication date, ArXiv URL, PDF URL, and categories
+    Build the Groq payload: system prompt, recent conversation, current user turn.
+    Filters loading/error/mock UI noise and limits history length.
     """
-    try:
-        # Create ArXiv client
-        client = arxiv.Client()
-        
-        # Search for papers
-        search = arxiv.Search(
-            query=query,
-            max_results=5,  # Get top 5 most relevant papers
-            sort_by=arxiv.SortCriterion.Relevance
-        )
-        
-        # Collect paper information
-        papers_info = []
-        for result in client.results(search):
-            # Format authors
-            authors_list = [author.name for author in result.authors]
-            if len(authors_list) > 3:
-                authors_str = ", ".join(authors_list[:3]) + f" et al. ({len(authors_list)} total authors)"
-            else:
-                authors_str = ", ".join(authors_list)
-            
-            # Format publication date
-            pub_date = result.published.strftime("%B %d, %Y")
-            
-            # Get abstract (first 500 chars for summary)
-            abstract = result.summary.replace('\n', ' ').strip()
-            abstract_short = abstract[:500] + "..." if len(abstract) > 500 else abstract
-            
-            # Format paper information
-            paper_info = f"""
-═══════════════════════════════════════════════════════════════
-📄 PAPER FOUND:
+    formatted_history = []
+    for message in history:
+        normalized = message_to_dict(message)
+        if normalized is not None:
+            formatted_history.append(normalized)
 
-📌 Title: {result.title}
+    formatted_history = dedupe_consecutive_messages(formatted_history)
+    formatted_history = formatted_history[-MAX_HISTORY_MESSAGES:]
 
-👥 Authors: {authors_str}
+    current_input = str(user_input or "").strip()[:MAX_MESSAGE_CHARS]
+    if formatted_history and formatted_history[-1]["role"] == "user":
+        if formatted_history[-1]["content"] == current_input:
+            formatted_history = formatted_history[:-1]
 
-📅 Published: {pub_date}
-
-📝 Abstract:
-{abstract_short}
-
-🔗 ArXiv URL: {result.entry_id}
-
-📥 PDF Download: {result.pdf_url}
-
-🏷️ Categories: {', '.join(result.categories)}
-═══════════════════════════════════════════════════════════════
-"""
-            papers_info.append(paper_info)
-        
-        if not papers_info:
-            return f"No papers found for query: '{query}'. Try different search terms or related topics."
-        
-        # Return formatted results
-        header = f"🔬 Found {len(papers_info)} relevant scientific papers for: '{query}'\n\n"
-        return header + "\n".join(papers_info)
-        
-    except Exception as e:
-        return f"Error searching ArXiv: {str(e)}. Please try a different query or check your internet connection."
+    return [
+        {"role": "system", "content": system_prompt},
+        *formatted_history,
+        {"role": "user", "content": current_input},
+    ]
 
 
-# System message for the Walter White / Heisenberg agent
-SYSTEM_MESSAGE = """You are Walter Hartwell White (Heisenberg): brilliant chemist, exacting, controlled. You answer questions about science, math, and research. You are NOT a novelist.
+def dicts_to_langchain_messages(messages: list[dict]) -> list:
+    """Convert formatted Groq message dicts to LangChain message objects."""
+    result = []
+    for message in messages:
+        role = message["role"]
+        content = message["content"]
+        if role == "system":
+            result.append(SystemMessage(content=content))
+        elif role == "user":
+            result.append(HumanMessage(content=content))
+        elif role == "assistant":
+            result.append(AIMessage(content=content))
+    return result
 
-## LENGTH — NON-NEGOTIABLE
 
-- Default: **SHORT.** Most answers: **2–5 sentences** or **under ~120 words** unless the user explicitly asks for detail ("explain fully", "step by step", "in depth", "long answer").
-- Small talk or vague questions ("what have you been doing", "how are you"): **1–3 sentences.** Dry. No lecture.
-- Heavy technical or tool-backed answers: still **tight** — lead with the answer, then bullets or one short paragraph. No preamble, no recap of the question in Victorian prose.
-- **Never** pad with throat-clearing ("Very well, I shall…", "It is worth noting that…", "In conclusion…"). **Never** write five paragraphs when two sentences suffice.
+def append_tool_results_to_messages(
+    messages: list[dict],
+    tool_results: str,
+    instruction: str | None = None,
+) -> list[dict]:
+    """Attach tool output and evidence instruction to the final user message."""
+    if not tool_results or not messages:
+        return messages
 
-## VOICE — HOW WALTER ACTUALLY TALKS
-
-- Plain American English. Short clauses. Calm. Direct. Like Bryan Cranston's delivery — not like a 19th-century essay.
-- **Banned phrasing:** "I shall indulge", "keeping abreast", "of little consequence", "mundane details", "what's your interest" as filler, "query that assumes familiarity", purple synonyms for simple words.
-- Contempt is **understated**: a flat line, not a speech. Example good tone: "Working. The kind of work that matters — precision, chemistry, no room for sloppiness." Bad tone: three paragraphs of abstract philosophy before an answer.
-
-## SUBSTANCE
-
-- Chemistry and science: exact when needed; still **brief** unless they asked for depth.
-- Pride in craft; zero tolerance for lazy reasoning. Say "No — here's why" in one breath, not a page.
-- If research context was provided (tools), weave facts in without repeating the whole dump.
-- Cite URLs / arXiv IDs when you use external facts — inline, not a bibliography essay.
-
-## PERSONA (LIGHT TOUCH)
-
-- Walter and Heisenberg: controlled menace, not ranting. A rare sharp line beats a monologue.
-- Quotes ("I am the danger", etc.): **only** if one short line fits; never stack multiple quotes to fill space.
-
-## HARD RULES
-
-- No emoji.
-- Always answer; never go silent.
-- **Brevity is character.** Long-winded is out of character.
-
-You spent half your life afraid. You're not afraid anymore — and you're not here to waste words."""
+    updated = list(messages)
+    last = dict(updated[-1])
+    last["content"] = (
+        f"{last['content']}\n\n"
+        f"Tool results:\n{tool_results}\n\n"
+        f"Instruction:\n{instruction or TOOL_RESULTS_INSTRUCTION}"
+    )
+    updated[-1] = last
+    return updated
 
 # Breaking Bad "Say my name." → "Heisenberg." → "You're goddamn right." (handled before tools/LLM)
 HEISENBERG_ACK_REPLY = "You're goddamn right."
@@ -216,22 +328,10 @@ class SimpleScientificAgent:
     def _should_use_tool(self, message: str) -> tuple:
         """Determine if we should use a tool based on the message content."""
         message_lower = message.lower()
-        
-        # Check for research paper requests
-        if any(keyword in message_lower for keyword in ['find research', 'find papers', 'find article', 'find studies', 'arxiv', 'scientific papers']):
-            # Extract the query
-            patterns = [
-                r'find (?:research|papers|articles|studies) (?:about|on|that say|that affirm) (.+)',
-                r'search (?:for )?(?:research|papers|articles) (?:about|on) (.+)',
-                r'(?:research|papers|articles) (?:about|on) (.+)'
-            ]
-            for pattern in patterns:
-                match = re.search(pattern, message_lower)
-                if match:
-                    query = match.group(1).strip()
-                    return ('search_scientific_papers', query)
-            # Default to the whole message if no specific pattern
-            return ('search_scientific_papers', message)
+
+        paper_topic = extract_paper_topic(message)
+        if paper_topic is not None:
+            return ("search_scientific_papers", paper_topic)
         
         # Check for calculations
         if any(keyword in message_lower for keyword in ['calculate', 'compute', 'what is', 'how much is']) and any(char in message for char in ['+', '-', '*', '/', '=', '²', '³']):
@@ -255,78 +355,181 @@ class SimpleScientificAgent:
     
     def invoke(self, inputs: dict) -> dict:
         """Process a message and return a response."""
-        messages = inputs.get('messages', [])
-        
-        # Prepare messages with system message
-        if not messages or not isinstance(messages[0], SystemMessage):
-            messages = [SystemMessage(content=SYSTEM_MESSAGE)] + messages
-        
-        # Get the last user message
+        raw_messages = inputs.get("messages", [])
+
+        conversation = []
+        for message in raw_messages:
+            normalized = message_to_dict(message)
+            if normalized is not None:
+                conversation.append(normalized)
+
+        if not conversation:
+            empty_system = [SystemMessage(content=build_system_prompt())]
+            return {
+                "messages": empty_system + [
+                    AIMessage(content="Ask your question — science, research, or math.")
+                ],
+                "tools_used": [],
+            }
+
         last_user_message = None
-        for msg in reversed(messages):
-            if isinstance(msg, HumanMessage):
-                last_user_message = msg.content
+        for message in reversed(conversation):
+            if message["role"] == "user":
+                last_user_message = message["content"]
                 break
-        
+
         if not last_user_message:
             return {
-                'messages': messages + [AIMessage(content="I'm waiting. Ask your question — and make it worth my time.")]
+                "messages": dicts_to_langchain_messages(
+                    format_messages_for_groq(build_system_prompt(), conversation, "")
+                )
+                + [AIMessage(content="Ask your question — science, research, or math.")],
+                "tools_used": [],
             }
 
         # Easter egg: answer to "Say my name." — must run before tools/LLM
         if is_heisenberg_name_response(last_user_message):
+            prior_history = [
+                message
+                for message in conversation
+                if not (
+                    message["role"] == "user"
+                    and message["content"] == last_user_message
+                )
+            ]
+            formatted = format_messages_for_groq(
+                build_system_prompt(), prior_history, last_user_message
+            )
             return {
-                'messages': messages + [AIMessage(content=HEISENBERG_ACK_REPLY)],
-                'tools_used': [],
+                "messages": dicts_to_langchain_messages(formatted)
+                + [AIMessage(content=HEISENBERG_ACK_REPLY)],
+                "tools_used": [],
             }
-        
+
+        prior_history = [
+            message
+            for message in conversation
+            if not (message["role"] == "user" and message["content"] == last_user_message)
+        ]
+
         # Check if we should use a tool
         tool_name, tool_input = self._should_use_tool(last_user_message)
-        
+
         tool_results = []
         tools_used = []
-        
+
+        paper_search_structured = None
+
         if tool_name and tool_name in self.tools:
             try:
-                tool_result = self.tools[tool_name](tool_input)
-                tool_results.append(f"\n\n[Tool: {tool_name}]\n{tool_result}\n")
+                if tool_name == "search_scientific_papers":
+                    paper_search_structured = search_scientific_papers_structured(
+                        tool_input
+                    )
+                    tool_result = format_structured_result_for_agent(
+                        paper_search_structured
+                    )
+                    if paper_search_structured.get("type") == "clarification":
+                        clarification_text = paper_search_structured["message"]
+                        if paper_search_structured.get("options"):
+                            clarification_text += "\n\n" + "\n".join(
+                                f"- {opt}"
+                                for opt in paper_search_structured["options"]
+                            )
+                        return {
+                            "messages": dicts_to_langchain_messages(
+                                format_messages_for_groq(
+                                    build_system_prompt(),
+                                    prior_history,
+                                    last_user_message,
+                                )
+                            )
+                            + [AIMessage(content=clarification_text)],
+                            "tools_used": ["search_scientific_papers"],
+                            "paper_search": paper_search_structured,
+                        }
+                else:
+                    tool_result = self.tools[tool_name](tool_input)
+
+                tool_results.append(f"[{tool_name}]\n{tool_result}")
                 tools_used.append(tool_name)
             except Exception as e:
-                tool_results.append(f"\n\n[Tool: {tool_name} - Error: {str(e)}]\n")
-        
-        # Build the context for the LLM
-        context_messages = messages.copy()
-        
-        # If we have tool results, add them as context
+                tool_results.append(f"[{tool_name} - Error: {str(e)}]")
+
+        formatted_messages = format_messages_for_groq(
+            build_system_prompt(),
+            prior_history,
+            last_user_message,
+        )
+
         if tool_results:
-            tool_context = "".join(tool_results)
-            context_messages.append(HumanMessage(content=f"{last_user_message}\n\n[Additional Context from Research Tools]:{tool_context}"))
-        
+            tool_instruction = TOOL_RESULTS_INSTRUCTION
+            if "search_scientific_papers" in tools_used:
+                tool_instruction = (
+                    f"{TOOL_RESULTS_INSTRUCTION}\n\n{PAPER_SEARCH_INSTRUCTION}"
+                )
+            formatted_messages = append_tool_results_to_messages(
+                formatted_messages,
+                "\n\n".join(tool_results),
+                instruction=tool_instruction,
+            )
+
+        context_messages = dicts_to_langchain_messages(formatted_messages)
+
         # Get response from LLM
         try:
             response = self.llm.invoke(context_messages)
-            response_content = response.content if hasattr(response, 'content') else str(response)
-            
-            # Add the response to messages
-            result_messages = messages + [AIMessage(content=response_content)]
-            
+            response_content = (
+                response.content if hasattr(response, "content") else str(response)
+            )
+
+            result_messages = context_messages + [AIMessage(content=response_content)]
+
             return {
-                'messages': result_messages,
-                'tools_used': tools_used
+                "messages": result_messages,
+                "tools_used": tools_used,
             }
         except Exception as e:
-            # Fallback response
+            if (
+                paper_search_structured
+                and paper_search_structured.get("type") == "paper_results"
+                and paper_search_structured.get("papers")
+            ):
+                lines = [
+                    paper_search_structured.get("message", "Ranked arXiv results:"),
+                    "",
+                ]
+                for i, paper in enumerate(paper_search_structured["papers"], 1):
+                    lines.append(f"{i}. {paper['title']} ({paper.get('year', '?')})")
+                    lines.append(f"   URL: {paper['url']}")
+                    lines.append(
+                        f"   Relevance score: {paper.get('relevanceScore', 0)}"
+                    )
+                    lines.append(f"   Why it matches: {paper.get('whyItMatches', '')}")
+                    lines.append(f"   Summary: {paper.get('summary', '')[:400]}")
+                    lines.append("")
+                lines.append(
+                    "(LLM synthesis unavailable; listing ranked papers from arXiv search.)"
+                )
+                result_messages = context_messages + [
+                    AIMessage(content="\n".join(lines))
+                ]
+                return {
+                    "messages": result_messages,
+                    "tools_used": tools_used,
+                    "paper_search": paper_search_structured,
+                }
+
             error_response = (
-                f"There's been a technical disruption: {str(e)[:100]}\n\n"
-                "My tools are momentarily unavailable — but I am not. "
-                "Ask me about science, research, mathematics, or chemistry. "
-                "I will answer from what I know, precisely and without hesitation."
+                f"Technical error: {str(e)[:100]}\n\n"
+                "Retry with a clear science or math question. "
+                "If the problem persists, check server logs."
             )
-            
-            result_messages = messages + [AIMessage(content=error_response)]
+
+            result_messages = context_messages + [AIMessage(content=error_response)]
             return {
-                'messages': result_messages,
-                'tools_used': []
+                "messages": result_messages,
+                "tools_used": tools_used,
             }
 
 
@@ -343,11 +546,12 @@ def create_scientific_agent():
             "as an environment variable (for Hugging Face Spaces, use secrets)."
         )
 
-    # 2. The Brain (LLM) - Simple configuration for Groq
+    # 2. The Brain (LLM) - tuned for factual research responses
     llm = ChatGroq(
         model_name="llama-3.3-70b-versatile",
-        temperature=0.55,
+        temperature=0.2,
         max_tokens=640,
+        model_kwargs={"top_p": 0.9},
     )
 
     # 3. Scientific Tools - Simple functions
@@ -369,13 +573,18 @@ def create_scientific_agent():
     return agent
 
 def prepare_messages(messages):
-    """Prepare messages with system message if not already present."""
-    # Check if first message is already a SystemMessage
-    if messages and isinstance(messages[0], SystemMessage):
-        return messages
-    
-    # Add system message at the beginning
-    return [SystemMessage(content=SYSTEM_MESSAGE)] + messages
+    """Keep only valid user/assistant turns; drop client system/UI noise."""
+    prepared = []
+    for message in messages:
+        if isinstance(message, SystemMessage):
+            continue
+        normalized = message_to_dict(message)
+        if normalized is not None:
+            if isinstance(message, HumanMessage):
+                prepared.append(HumanMessage(content=normalized["content"]))
+            elif isinstance(message, AIMessage):
+                prepared.append(AIMessage(content=normalized["content"]))
+    return prepared
 
 
 def main() -> None:
@@ -383,7 +592,7 @@ def main() -> None:
     agent = create_scientific_agent()
     
     print("\n" + "="*60)
-    print("  HEISENBERG — SCIENTIFIC INTELLIGENCE SYSTEM")
+    print("  GRAY MATTER LABS — RESEARCH AGENT")
     print("="*60)
     print("\nOperational tools:")
     print("  Web Search (DuckDuckGo)")
