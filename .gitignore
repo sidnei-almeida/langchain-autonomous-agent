@@ -33,3 +33,6 @@ Thumbs.db
 # Docker
 *.pid
 
+
+# HF Spaces — no binary assets in git
+images/
