@@ -7,7 +7,7 @@ sdk: docker
 app_port: 7860
 pinned: false
 license: mit
-short_description: Research API — ranked arXiv, Groq Llama 3.3, Wikipedia, web search
+short_description: Ranked arXiv search API with Groq and research tools
 tags:
   - langchain
   - groq
