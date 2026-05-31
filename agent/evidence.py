@@ -40,11 +40,26 @@ def format_evidence_for_llm(evidence: list[EvidenceItem]) -> str:
 def compute_confidence(state: ResearchState) -> float:
     if state.intent and state.intent.needs_clarification:
         return 0.3
+    tooling_intents = (
+        "technology_discovery",
+        "tool_comparison",
+        "web_research",
+        "concept_explanation",
+    )
     if not state.evidence:
+        if state.intent and state.intent.intent in tooling_intents:
+            return 0.4
         return 0.45 if state.intent and state.intent.intent == "general_chat" else 0.35
     avg = sum(e.relevance_score for e in state.evidence) / len(state.evidence)
     tool_bonus = min(0.2, len(state.tools_used) * 0.05)
-    return round(min(0.95, avg * 0.7 + tool_bonus + 0.15), 2)
+    score = min(0.95, avg * 0.7 + tool_bonus + 0.15)
+    if (
+        state.intent
+        and state.intent.intent in tooling_intents
+        and any(e.source_type == "web" for e in state.evidence)
+    ):
+        score = max(score, 0.55)
+    return round(score, 2)
 
 
 def mark_sources_used_in_answer(state: ResearchState, answer: str) -> None:

@@ -28,6 +28,90 @@ class TestIntentFallback(unittest.TestCase):
         self.assertIn("calculator", r.tools_required)
 
 
+class TestToolingRouting(unittest.TestCase):
+    """Routing for vector DB / RAG tooling vs explicit paper search."""
+
+    FAISS_RAG_QUERY = (
+        "Is there any new technology for RAG that replaces FAISS "
+        "in terms of vectorizing DB?"
+    )
+
+    def test_faiss_rag_technology_discovery(self):
+        from agent.router import _heuristic_classify
+
+        r = _heuristic_classify(self.FAISS_RAG_QUERY)
+        self.assertIn(r.intent, ("technology_discovery", "tool_comparison"))
+        self.assertIn("web_search", r.tools_required)
+        self.assertNotIn("arxiv", r.tools_required)
+
+    def test_explicit_arxiv_paper_search(self):
+        from agent.router import _heuristic_classify
+
+        r = _heuristic_classify(
+            "Find recent arXiv papers about alternatives to FAISS for RAG"
+        )
+        self.assertIn(r.intent, ("paper_search", "mixed_research"))
+        self.assertIn("arxiv", r.tools_required)
+
+    def test_faiss_concept_explanation(self):
+        from agent.router import _heuristic_classify
+
+        r = _heuristic_classify("What is FAISS and how is it used in RAG?")
+        self.assertEqual(r.intent, "concept_explanation")
+        self.assertNotIn("arxiv", r.tools_required)
+
+    def test_vector_db_tool_comparison(self):
+        from agent.router import _heuristic_classify
+
+        r = _heuristic_classify("Qdrant vs Milvus vs FAISS for production RAG")
+        self.assertEqual(r.intent, "tool_comparison")
+        self.assertIn("web_search", r.tools_required)
+        self.assertNotIn("arxiv", r.tools_required)
+
+    def test_apply_routing_overrides_demotes_arxiv_only(self):
+        from agent.router import apply_routing_overrides
+        from agent.state import IntentResult
+
+        misrouted = IntentResult(
+            intent="paper_search",
+            tools_required=["arxiv"],
+            query_rewrite="RAG FAISS vector database",
+        )
+        fixed = apply_routing_overrides(misrouted, self.FAISS_RAG_QUERY)
+        self.assertIn(fixed.intent, ("technology_discovery", "tool_comparison"))
+        self.assertIn("web_search", fixed.tools_required)
+        self.assertNotIn("arxiv", fixed.tools_required)
+
+    def test_should_continue_after_weak_arxiv_for_tooling(self):
+        from agent.tools import _should_continue_after_weak_arxiv
+        from agent.state import IntentResult, ResearchState
+
+        state = ResearchState(
+            user_query=self.FAISS_RAG_QUERY,
+            intent=IntentResult(
+                intent="technology_discovery",
+                tools_required=["web_search"],
+            ),
+        )
+        self.assertTrue(_should_continue_after_weak_arxiv(state))
+
+    def test_tool_order_web_first_for_tooling(self):
+        from agent.tools import _tool_execution_order
+        from agent.state import IntentResult, ResearchState
+
+        state = ResearchState(
+            user_query=self.FAISS_RAG_QUERY,
+            intent=IntentResult(
+                intent="technology_discovery",
+                tools_required=["web_search", "wikipedia"],
+                tools_optional=["arxiv"],
+            ),
+        )
+        order = _tool_execution_order(state)
+        self.assertEqual(order[0], "web_search")
+        self.assertNotIn("arxiv", order)
+
+
 class TestCalculator(unittest.TestCase):
     def test_basic_math(self):
         from agent.tools import calculator

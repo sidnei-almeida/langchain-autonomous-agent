@@ -123,7 +123,12 @@ def _suggest_follow_ups(state: ResearchState) -> list[str]:
         follow_ups.append("Would you like a deeper summary of any specific paper?")
     if state.intent and state.intent.intent == "concept_explanation":
         follow_ups.append("Would you like recent papers on this topic?")
-    if state.intent and state.intent.intent in ("mixed_research", "web_research"):
+    if state.intent and state.intent.intent in (
+        "mixed_research",
+        "web_research",
+        "technology_discovery",
+        "tool_comparison",
+    ):
         follow_ups.append("Should I search arXiv for peer-reviewed sources?")
     return follow_ups[:3]
 

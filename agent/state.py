@@ -9,6 +9,8 @@ IntentType = Literal[
     "concept_explanation",
     "paper_search",
     "web_research",
+    "technology_discovery",
+    "tool_comparison",
     "calculation",
     "comparative_research",
     "mixed_research",
@@ -20,10 +22,12 @@ IntentType = Literal[
 class IntentResult:
     intent: IntentType
     tools_required: list[str]
+    tools_optional: list[str] = field(default_factory=list)
     needs_clarification: bool = False
     clarification_question: str = ""
     research_depth: ResearchDepth = "standard"
     query_rewrite: str = ""
+    reason: str = ""
 
 
 @dataclass

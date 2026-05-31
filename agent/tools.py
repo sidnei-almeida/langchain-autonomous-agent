@@ -14,52 +14,50 @@ from arxiv_search import (
     search_scientific_papers_structured,
     wants_recent_papers,
 )
+from agent.router import is_explicit_paper_request, is_tooling_intent
 from agent.state import EvidenceItem, ResearchState
 
 RECENT_KEYWORDS = ("latest", "recent", "current", "new", "2024", "2025", "2026")
 
-
-def calculator(expression: str) -> str:
-    try:
-        expression = expression.replace("pi", str(math.pi))
-        expression = expression.replace("e", str(math.e))
-        expression = expression.replace("sqrt", "math.sqrt")
-        expression = expression.replace("sin", "math.sin")
-        expression = expression.replace("cos", "math.cos")
-        expression = expression.replace("tan", "math.tan")
-        expression = expression.replace("log", "math.log10")
-        expression = expression.replace("ln", "math.log")
-        expression = expression.replace("exp", "math.exp")
-        expression = expression.replace("abs", "abs")
-        safe_dict = {
-            "math": math,
-            "__builtins__": {},
-            "abs": abs,
-            "round": round,
-            "min": min,
-            "max": max,
-            "sum": sum,
-            "pow": pow,
-        }
-        return str(eval(expression, safe_dict))
-    except Exception as e:
-        return f"Calculation error: {str(e)}"
+# Execution order: web/wikipedia before arXiv unless explicit paper search.
+TOOL_ORDER_PAPER_FIRST = ("arxiv", "web_search", "wikipedia", "calculator")
+TOOL_ORDER_WEB_FIRST = ("web_search", "wikipedia", "arxiv", "calculator")
 
 
-def _extract_calc_expression(query: str) -> str | None:
-    patterns = [
-        r"(?:calculate|compute|eval(?:uate)?)\s+(.+)",
-        r"(?:what is|how much is)\s+([\d\s+\-*/().^]+)",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, query, re.IGNORECASE)
-        if match:
-            return match.group(1).strip()
-    calc_pattern = r"[\d\+\-\*/\(\)\.\^\s]+"
-    matches = re.findall(calc_pattern, query)
-    if matches and any(c in query for c in "+-*/="):
-        return max(matches, key=len).strip()
-    return None
+def _tool_execution_order(state: ResearchState) -> tuple[str, ...]:
+    intent = state.intent.intent if state.intent else "general_chat"
+    required = list(state.intent.tools_required) if state.intent else []
+    if intent == "paper_search" or (
+        "arxiv" in required and is_explicit_paper_request(state.user_query)
+    ):
+        base = TOOL_ORDER_PAPER_FIRST
+    else:
+        base = TOOL_ORDER_WEB_FIRST
+
+    ordered = [t for t in base if t in required]
+    for tool in required:
+        if tool not in ordered:
+            ordered.append(tool)
+    return tuple(ordered)
+
+
+def _arxiv_weak_or_clarification(structured: dict[str, Any]) -> bool:
+    if structured.get("type") == "clarification":
+        return True
+    papers = structured.get("papers") or []
+    return structured.get("type") == "paper_results" and len(papers) == 0
+
+
+def _should_continue_after_weak_arxiv(state: ResearchState) -> bool:
+    if not state.intent:
+        return False
+    if is_tooling_intent(state.intent.intent):
+        return True
+    if state.intent.intent == "concept_explanation":
+        return True
+    if not is_explicit_paper_request(state.user_query):
+        return True
+    return False
 
 
 class ToolRegistry:
@@ -162,42 +160,66 @@ class ToolRegistry:
 
         return formatted, structured, evidence
 
+    def _run_web_fallback(self, state: ResearchState, query: str) -> None:
+        if "web_search" in state.tools_used:
+            return
+        try:
+            _, evs = self.run_web(query)
+            state.tools_used.append("web_search")
+            state.evidence.extend(evs)
+            state.limitations.append(
+                "arXiv had no strong matches; supplemented with web search for tooling context."
+            )
+        except Exception as exc:
+            print(f"Web fallback failed: {exc}")
+            state.limitations.append("Web fallback search encountered an error.")
+
     def execute_tools(self, state: ResearchState) -> ResearchState:
         if not state.intent:
             return state
 
         query = state.intent.query_rewrite or state.user_query
-        tools = state.intent.tools_required
+        tools = _tool_execution_order(state)
         recent = any(kw in query.lower() for kw in RECENT_KEYWORDS)
+        arxiv_weak = False
 
         for tool in tools:
             try:
                 if tool == "calculator":
-                    text, ev = self.run_calculator(query)
+                    _, ev = self.run_calculator(query)
                     state.tools_used.append("calculator")
                     if ev:
                         state.evidence.append(ev)
 
                 elif tool == "wikipedia":
-                    text, evs = self.run_wikipedia(query)
+                    _, evs = self.run_wikipedia(query)
                     state.tools_used.append("wikipedia")
                     state.evidence.extend(evs)
 
                 elif tool == "web_search":
-                    text, evs = self.run_web(query)
+                    _, evs = self.run_web(query)
                     state.tools_used.append("web_search")
                     state.evidence.extend(evs)
 
                 elif tool == "arxiv":
-                    text, structured, evs = self.run_arxiv(
+                    _, structured, evs = self.run_arxiv(
                         query,
                         user_query=state.user_query,
                         depth=state.depth,
                         recent_only=recent,
                     )
-                    state.tools_used.append("search_scientific_papers")
                     state.paper_search = structured
-                    if structured.get("type") == "clarification":
+
+                    if _arxiv_weak_or_clarification(structured):
+                        arxiv_weak = True
+                        if _should_continue_after_weak_arxiv(state):
+                            state.limitations.append(
+                                "arXiv search did not return strong paper matches "
+                                "(not required for tooling/technology questions)."
+                            )
+                            continue
+
+                        state.tools_used.append("search_scientific_papers")
                         state.intent.needs_clarification = True
                         state.intent.clarification_question = structured.get(
                             "message", ""
@@ -208,6 +230,8 @@ class ToolRegistry:
                                 f"- {o}" for o in options
                             )
                         return state
+
+                    state.tools_used.append("search_scientific_papers")
                     state.papers = structured.get("papers") or []
                     state.evidence.extend(evs)
 
@@ -215,4 +239,71 @@ class ToolRegistry:
                 print(f"Tool {tool} failed: {exc}")
                 state.limitations.append(f"{tool} search encountered an error.")
 
+        if arxiv_weak and _should_continue_after_weak_arxiv(state):
+            self._run_web_fallback(state, state.user_query)
+
+        if (
+            state.depth == "deep"
+            and state.intent
+            and "arxiv" in state.intent.tools_optional
+            and "search_scientific_papers" not in state.tools_used
+        ):
+            try:
+                _, structured, evs = self.run_arxiv(
+                    query,
+                    user_query=state.user_query,
+                    depth=state.depth,
+                    recent_only=recent,
+                )
+                state.paper_search = structured
+                if not _arxiv_weak_or_clarification(structured):
+                    state.tools_used.append("search_scientific_papers")
+                    state.papers = structured.get("papers") or []
+                    state.evidence.extend(evs)
+            except Exception as exc:
+                print(f"Optional arXiv (deep) failed: {exc}")
+
         return state
+
+
+def calculator(expression: str) -> str:
+    try:
+        expression = expression.replace("pi", str(math.pi))
+        expression = expression.replace("e", str(math.e))
+        expression = expression.replace("sqrt", "math.sqrt")
+        expression = expression.replace("sin", "math.sin")
+        expression = expression.replace("cos", "math.cos")
+        expression = expression.replace("tan", "math.tan")
+        expression = expression.replace("log", "math.log10")
+        expression = expression.replace("ln", "math.log")
+        expression = expression.replace("exp", "math.exp")
+        expression = expression.replace("abs", "abs")
+        safe_dict = {
+            "math": math,
+            "__builtins__": {},
+            "abs": abs,
+            "round": round,
+            "min": min,
+            "max": max,
+            "sum": sum,
+            "pow": pow,
+        }
+        return str(eval(expression, safe_dict))
+    except Exception as e:
+        return f"Calculation error: {str(e)}"
+
+
+def _extract_calc_expression(query: str) -> str | None:
+    patterns = [
+        r"(?:calculate|compute|eval(?:uate)?)\s+(.+)",
+        r"(?:what is|how much is)\s+([\d\s+\-*/().^]+)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, query, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    calc_pattern = r"[\d\+\-\*/\(\)\.\^\s]+"
+    matches = re.findall(calc_pattern, query)
+    if matches and any(c in query for c in "+-*/="):
+        return max(matches, key=len).strip()
+    return None

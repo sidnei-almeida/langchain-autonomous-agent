@@ -19,6 +19,16 @@ PLAN_TEMPLATES: dict[str, list[str]] = {
         "Search the web for current context",
         "Synthesize answer with sources",
     ],
+    "technology_discovery": [
+        "Identify the technology or tooling question",
+        "Search the web for current tools and practices",
+        "Synthesize answer with web sources (not arXiv-first)",
+    ],
+    "tool_comparison": [
+        "Identify tools or platforms to compare",
+        "Search the web for comparisons and production guidance",
+        "Structure a comparison with evidence from web sources",
+    ],
     "calculation": [
         "Parse the mathematical expression",
         "Run deterministic calculation",

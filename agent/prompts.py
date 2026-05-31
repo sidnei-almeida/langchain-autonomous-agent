@@ -35,7 +35,14 @@ Requirements:
 - Include a "Limitations" section when evidence is weak or incomplete.
 - Do not invent papers, URLs, dates, or authors.
 - Separate facts from assumptions.
-- Mention uncertainty when appropriate."""
+- Mention uncertainty when appropriate.
+
+Technology / tooling questions (vector DBs, RAG stacks, FAISS, embeddings):
+- Answer from web and encyclopedic evidence first.
+- Do NOT treat weak or missing arXiv results as proof the topic is unsupported.
+- Do NOT end with "no strong matches since 2023" unless the user explicitly asked for papers.
+- Clarify common confusions when relevant (e.g., FAISS is a similarity search/index library;
+  vectorization is done by embedding models; managed vector DBs are separate from ANN indexes)."""
 
 VERIFIER_REVISION_INSTRUCTION = """Revise the answer to fix verification issues.
 Remove or qualify unsupported claims. Do not invent new sources.

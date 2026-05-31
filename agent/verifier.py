@@ -26,7 +26,8 @@ def verify_answer(state: ResearchState) -> ResearchState:
     if any(p in answer for p in PAPER_CLAIMS):
         has_arxiv = any(e.source_type == "arxiv" for e in state.evidence)
         if not has_arxiv and state.intent and state.intent.intent in (
-            "paper_search", "mixed_research"
+            "paper_search",
+            "mixed_research",
         ):
             issues.append("Answer discusses papers but no arXiv evidence was retrieved.")
 
