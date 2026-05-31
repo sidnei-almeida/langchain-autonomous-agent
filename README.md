@@ -1,5 +1,5 @@
 ---
-title: Gray Matter LABS
+title: Gray Matter Research Agent
 emoji: ⚗️
 colorFrom: gray
 colorTo: green
@@ -7,95 +7,176 @@ sdk: docker
 app_port: 7860
 pinned: false
 license: mit
-short_description: Ranked arXiv search API with Groq and research tools
+short_description: Agentic research API — plan, search, rank, synthesize
 tags:
   - langchain
   - groq
   - fastapi
   - arxiv
-  - scientific-research
   - agent
+  - scientific-research
 ---
 
-# Gray Matter LABS — Research Agent
+# Gray Matter Research Agent
 
-**LangChain · Groq (Llama 3.3 70B) · FastAPI · Docker · Hugging Face Spaces**
+**Agentic scientific research API** that plans, searches, ranks evidence, and synthesizes grounded answers using **Groq (Llama 3.3 70B)**, **LangChain**, **FastAPI**, **arXiv**, **Wikipedia**, **web search**, and a **deterministic calculator**.
 
-Autonomous scientific Q&A API with **ranked arXiv search**, factual guardrails, and heuristic tool routing (DuckDuckGo, Wikipedia, calculator).
+Unlike a traditional RAG chatbot that retrieves once and answers, Gray Matter **classifies intent**, builds a **research plan**, runs **multiple tools** when needed, **ranks evidence**, **synthesizes** with citations, and **verifies** the answer before returning.
 
 | | |
 |---|---|
-| **Live API (Space)** | Open this Space → `/docs` for Swagger |
+| **Live API** | This Space → `/docs` |
 | **GitHub** | [sidnei-almeida/langchain-autonomous-agent](https://github.com/sidnei-almeida/langchain-autonomous-agent) |
-| **HF deploy guide** | [README_HF.md](./README_HF.md) |
-| **Groq key** | [console.groq.com](https://console.groq.com) |
+| **Groq** | [console.groq.com](https://console.groq.com) |
 
 ---
 
-## Hugging Face Spaces (quick start)
-
-1. **Create Space** → SDK: **Docker** → connect this repository (or push to the Space Git remote).
-2. **Settings → Secrets** → add `GROQ_API_KEY` (required).
-3. Wait for the Docker build; open **`/docs`** (port **7860** is set via `app_port` in this README front matter).
-4. Test: `POST /api/query` with `{"question": "find papers about human-computer interaction"}`.
-
-Full checklist: [README_HF.md](./README_HF.md).
-
----
-
-## What it does
-
-- **Gray Matter** persona — dry, precise lab tone; **not** a source of truth (no roleplay-as-fact).
-- **arXiv pipeline** (`arxiv_search.py`) — ambiguity detection, query expansion, relevance scoring, no weak first-result dumps.
-- **Groq** synthesis with low temperature (`0.2`) and conversation history limits.
-- **REST API** — `/api/query`, `/api/chat`, `/health`, OpenAPI at `/docs`.
+## Architecture
 
 ```mermaid
-flowchart LR
-  U[Client] --> API[FastAPI]
-  API --> A[Agent]
-  A --> R[Router]
-  R --> ArXiv[Ranked arXiv]
-  R --> Other[Wikipedia / Web / Calc]
-  R --> G[Groq]
-  ArXiv --> G
-  Other --> G
-  G --> API
+flowchart TB
+  U[Client / Frontend] --> API[FastAPI]
+  API --> G[Research Graph]
+  G --> C[Intent Classifier]
+  C --> P[Planner]
+  P --> T[Multi-Tool Executor]
+  T --> A[ArXiv Ranked Search]
+  T --> W[Wikipedia]
+  T --> D[DuckDuckGo]
+  T --> M[Calculator]
+  T --> E[Evidence Ranker]
+  E --> S[Synthesizer + Groq]
+  S --> V[Verifier]
+  V --> API
   API --> U
 ```
 
----
+### Pipeline steps
 
-## Tools
-
-| Tool | Role |
-|------|------|
-| **ArXiv** | Ranked papers (up to 12 candidates, score ≥ 6, clarification if vague) |
-| **DuckDuckGo** | Recent web / news |
-| **Wikipedia** | Encyclopedic background |
-| **Calculator** | Sandboxed math |
+1. **Classify** — LLM + heuristic fallback → intent, tools, depth, query rewrite
+2. **Plan** — 2–5 operational steps (not chain-of-thought)
+3. **Execute** — arXiv + web + Wikipedia + calculator as needed
+4. **Rank** — normalize sources into a common evidence format
+5. **Synthesize** — grounded answer with sources & limitations
+6. **Verify** — flag invented URLs, unsupported paper claims, false recency
 
 ---
 
-## Local development
+## vs Traditional RAG Chatbot
+
+| | Traditional RAG | Gray Matter Research Agent |
+|---|---|---|
+| Routing | Single retrieval | Intent-based multi-tool |
+| arXiv | First result | Ranked + relevance threshold |
+| Ambiguity | Often hallucinates | Asks clarification |
+| Evidence | Unstructured chunks | Scored source objects |
+| Answer | Generate once | Synthesize + verify |
+| API | Text only | Structured JSON (papers, plan, confidence) |
+
+---
+
+## Quick start (local)
 
 ```bash
 git clone https://github.com/sidnei-almeida/langchain-autonomous-agent.git
 cd langchain-autonomous-agent
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-echo "GROQ_API_KEY=your_key_here" > .env
+echo "GROQ_API_KEY=your_key" > .env
 python app.py
 ```
 
-- API: `http://localhost:7860`
-- Docs: `http://localhost:7860/docs`
+Open `http://localhost:7860/docs`
 
-**Docker**
+**CLI**
 
 ```bash
-docker compose up --build
+python -m agent "latest papers about agentic RAG"
 ```
+
+---
+
+## API examples
+
+### POST `/api/query`
+
+```bash
+curl -X POST http://localhost:7860/api/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Explain quantum entanglement"}'
+```
+
+### POST `/api/research` (deep mode)
+
+```bash
+curl -X POST http://localhost:7860/api/research \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Compare RAG and agentic RAG", "depth": "deep", "max_sources": 12}'
+```
+
+### Example response (abridged)
+
+```json
+{
+  "answer": "…synthesis with Sources used section…",
+  "question": "latest papers about agentic RAG",
+  "tools_used": ["search_scientific_papers", "web_search"],
+  "intent": "mixed_research",
+  "research_plan": [
+    "Identify the scientific topic",
+    "Search arXiv for recent papers",
+    "Search web for current context",
+    "Synthesize answer with sources"
+  ],
+  "papers": [
+    {
+      "title": "…",
+      "year": 2024,
+      "url": "https://arxiv.org/abs/…",
+      "relevanceScore": 18,
+      "whyItMatches": "…"
+    }
+  ],
+  "sources": [
+    {
+      "title": "…",
+      "url": "https://…",
+      "source_type": "arxiv",
+      "relevance_score": 0.85,
+      "used_in_answer": true
+    }
+  ],
+  "confidence": 0.78,
+  "limitations": [],
+  "follow_up_questions": ["Would you like a deeper summary of any specific paper?"],
+  "processing_time": 8.4
+}
+```
+
+### Clarification example
+
+Query: `"paper about human interactions"`
+
+```json
+{
+  "answer": "Human interactions is broad. Do you mean human-computer interaction…",
+  "intent": "paper_search",
+  "confidence": 0.3,
+  "limitations": ["Query needs clarification before research can proceed."]
+}
+```
+
+---
+
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Liveness |
+| GET | `/api/tools` | Tool catalog |
+| POST | `/api/query` | Single-turn Q&A |
+| POST | `/api/chat` | Multi-turn chat |
+| POST | `/api/research` | Deep research mode |
 
 ---
 
@@ -103,68 +184,71 @@ docker compose up --build
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `GROQ_API_KEY` | Yes | Groq API key (Space **Secrets** or `.env` locally) |
-| `PORT` | No | HTTP port (default **7860**; HF sets this from `app_port`) |
+| `GROQ_API_KEY` | Yes | Groq LLM key |
+| `GRAY_MATTER_API_KEY` | No | Optional API key (`X-API-Key` header) |
+| `CORS_ORIGINS` | No | Comma-separated origins (default `*`) |
+| `PORT` | No | HTTP port (default `7860`) |
+| `MAX_REQUEST_BYTES` | No | Request body limit (default `65536`) |
 
 ---
 
-## API endpoints
+## Project structure
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/` | Metadata |
-| GET | `/health` | Liveness |
-| GET | `/api/tools` | Tool list |
-| POST | `/api/query` | Single question |
-| POST | `/api/chat` | Multi-turn chat |
-
-Details: [API_DOCS.md](./API_DOCS.md).
-
----
-
-## Repository layout
-
-| Path | Role |
-|------|------|
-| `agent.py` | Agent, Groq, tools, system prompt |
-| `arxiv_search.py` | arXiv ranking & clarification |
-| `api.py` | FastAPI routes |
-| `app.py` | Uvicorn entry (`PORT`) |
-| `Dockerfile` | HF Spaces / Docker image |
-| `requirements.txt` | Dependencies |
-| `README_HF.md` | Spaces deployment |
-| `API_DOCS.md` | REST reference |
+```
+agent/
+  state.py        # ResearchState, EvidenceItem, IntentResult
+  router.py       # Intent classifier (LLM + fallback)
+  planner.py      # Research plan builder
+  tools.py        # Multi-tool executor
+  evidence.py     # Source ranking
+  synthesizer.py  # Answer generation
+  verifier.py     # Claim verification
+  graph.py        # Pipeline orchestration
+arxiv_search.py   # Ranked arXiv with ambiguity detection
+api.py            # FastAPI routes
+```
 
 ---
 
-## Space build files (required on HF)
+## Screenshots
 
-The Docker image copies at minimum:
-
-- `Dockerfile`
-- `requirements.txt`
-- `app.py`, `api.py`, `agent.py`, `arxiv_search.py`
-- `README.md` (this file — YAML front matter configures the Space card)
+<!-- Portfolio placeholders -->
+| Swagger UI | Research response |
+|---|---|
+| _Add screenshot: `/docs`_ | _Add screenshot: paper results JSON_ |
 
 ---
 
 ## Limitations
 
-- Heuristic routing (not native LLM tool-calling).
-- Permissive CORS (`*`) — tighten for production.
-- No built-in auth or rate limits.
-- Outbound network to Groq, arXiv, Wikipedia, DuckDuckGo.
+- Heuristic + LLM routing may misclassify edge cases
+- Groq rate limits apply on HF Spaces
+- No persistent memory across sessions
+- Calculator uses sandboxed `eval` — not a security boundary for untrusted multi-tenant input
+- Verifier is rule-based, not a full fact-checker
 
 ---
 
-## Disclaimer
+## Roadmap
 
-Persona inspired by a *Breaking Bad* archetype for **tone only** — independent project, not affiliated with rights holders. Users must comply with third-party terms (Groq, arXiv, etc.).
+- [ ] Native LangGraph tool-calling mode (feature flag)
+- [ ] Streaming responses (`/api/research/stream`)
+- [ ] Redis cache for arXiv queries
+- [ ] Frontend: Gray Matter LABS chat UI
+- [ ] Semantic reranker for evidence
+
+---
+
+## Hugging Face Spaces
+
+1. SDK: **Docker** · Port: **7860**
+2. Secret: `GROQ_API_KEY`
+3. Optional: `GRAY_MATTER_API_KEY`, `CORS_ORIGINS`
+
+See [README_HF.md](./README_HF.md).
 
 ---
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
-
-**Maintainer:** [@sidnei-almeida](https://github.com/sidnei-almeida)
+MIT — [LICENSE](./LICENSE) · Maintainer: [@sidnei-almeida](https://github.com/sidnei-almeida)

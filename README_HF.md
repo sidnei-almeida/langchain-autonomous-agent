@@ -38,13 +38,11 @@ The app calls `load_dotenv()` but Spaces inject secrets as environment variables
 
 | File | Purpose |
 |------|---------|
-| `Dockerfile` | Image build |
-| `requirements.txt` | Python deps |
-| `app.py` | Uvicorn entry (`PORT` from Space) |
-| `api.py` | FastAPI app |
-| `agent.py` | Agent + Groq + tools |
+| `agent/` | Modular agent pipeline (graph, router, tools, …) |
 | `arxiv_search.py` | Ranked arXiv search |
-| `README.md` | Space card + `sdk` / `app_port` metadata |
+| `api.py`, `api_config.py`, `api_helpers.py` | FastAPI + middleware |
+| `app.py` | Uvicorn entry |
+| `Dockerfile` | HF Spaces image |
 
 Do **not** commit `.env` or API keys.
 

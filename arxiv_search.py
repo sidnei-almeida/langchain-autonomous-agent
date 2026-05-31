@@ -12,6 +12,8 @@ import arxiv
 ARXIV_FETCH_MAX = 12
 MIN_RELEVANCE_SCORE = 6
 MAX_RETURN_PAPERS = 3
+MAX_RETURN_PAPERS_DEEP = 5
+RECENT_YEAR_CUTOFF = 2023  # papers from this year onward when "recent" requested
 
 STOPWORDS = frozenset(
     {
@@ -423,6 +425,17 @@ def _result_to_candidate(result: arxiv.Result) -> PaperCandidate:
     )
 
 
+def wants_recent_papers(query: str) -> bool:
+    q = normalize_query(query)
+    return any(
+        kw in q
+        for kw in (
+            "latest", "recent", "current", "new", "newest",
+            "2024", "2025", "2026", "last year", "this year",
+        )
+    )
+
+
 def fetch_arxiv_candidates(queries: list[str], max_per_query: int = ARXIV_FETCH_MAX) -> list[PaperCandidate]:
     client = arxiv.Client()
     seen: set[str] = set()
@@ -469,11 +482,27 @@ def paper_results_payload(
     }
 
 
-def search_scientific_papers_structured(user_query: str) -> dict[str, Any]:
+def _filter_by_year(candidates: list[PaperCandidate], min_year: int | None) -> list[PaperCandidate]:
+    if min_year is None:
+        return candidates
+    filtered = [p for p in candidates if p.year >= min_year]
+    return filtered if filtered else candidates
+
+
+def search_scientific_papers_structured(
+    user_query: str,
+    *,
+    max_papers: int | None = None,
+    recent_only: bool = False,
+) -> dict[str, Any]:
     """
     Main pipeline: ambiguity check → query expansion → fetch → score → filter.
     """
     topic = user_query.strip()
+    limit = max_papers or MAX_RETURN_PAPERS
+    if limit > MAX_RETURN_PAPERS_DEEP:
+        limit = MAX_RETURN_PAPERS_DEEP
+
     if not topic:
         return clarification_payload(
             "What topic should I search for on arXiv?",
@@ -496,6 +525,8 @@ def search_scientific_papers_structured(user_query: str) -> dict[str, Any]:
         )
 
     candidates = fetch_arxiv_candidates(queries)
+    min_year = RECENT_YEAR_CUTOFF if recent_only or wants_recent_papers(topic) else None
+    candidates = _filter_by_year(candidates, min_year)
     if not candidates:
         return clarification_payload(
             f"I did not find arXiv results for '{topic}'. "
@@ -514,14 +545,15 @@ def search_scientific_papers_structured(user_query: str) -> dict[str, Any]:
     strong = [p for p, s, _ in scored if s >= MIN_RELEVANCE_SCORE]
 
     if not strong:
-        return clarification_payload(
-            f"I did not find a strong arXiv match for '{topic}'. "
-            "Do you mean human-computer interaction, human-AI interaction, "
-            "human-robot interaction, or social interaction?",
-            CLARIFICATION_OPTIONS_HUMAN_INTERACTION,
+        msg = f"I did not find a strong arXiv match for '{topic}'."
+        if min_year:
+            msg += f" No strong matches since {min_year}."
+        msg += (
+            " Try a more specific phrase or clarify the research area."
         )
+        return clarification_payload(msg, CLARIFICATION_OPTIONS_HUMAN_INTERACTION)
 
-    top = strong[:MAX_RETURN_PAPERS]
+    top = strong[:limit]
     papers_out = [
         {
             "title": p.title,
