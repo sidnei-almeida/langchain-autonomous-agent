@@ -118,6 +118,58 @@ def content_words(query: str) -> list[str]:
     return [w for w in normalize_query(query).split() if w not in STOPWORDS and len(w) > 1]
 
 
+# Too vague to use as an arXiv topic alone
+INVALID_TOPICS = frozenset(
+    {
+        "paper",
+        "papers",
+        "artigo",
+        "artigos",
+        "research",
+        "study",
+        "studies",
+        "estudo",
+        "estudos",
+        "arxiv",
+        "um",
+        "uma",
+        "a",
+    }
+)
+
+
+def _clean_extracted_topic(topic: str) -> str:
+    """Strip filler prefixes left after regex capture."""
+    t = re.sub(r"[?.!]+$", "", topic.strip())
+    t = re.sub(
+        r"^(?:um|uma|a|the)\s+(?:paper|papers|artigo|artigos)\s+(?:sobre|about|on)\s+",
+        "",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"^(?:paper|papers|artigo|artigos)\s+(?:sobre|about|on|regarding|acerca)\s+",
+        "",
+        t,
+        flags=re.IGNORECASE,
+    )
+    return t.strip()
+
+
+def is_valid_paper_topic(topic: str) -> bool:
+    if not topic or len(topic.strip()) < 3:
+        return False
+    norm = normalize_query(topic)
+    if norm in INVALID_TOPICS:
+        return False
+    words = content_words(topic)
+    if not words:
+        return False
+    if len(words) == 1 and words[0] in INVALID_TOPICS:
+        return False
+    return True
+
+
 def extract_paper_topic(message: str) -> str | None:
     """Extract research topic from a user message requesting papers."""
     if not message:
@@ -142,25 +194,54 @@ def extract_paper_topic(message: str) -> str | None:
     ):
         return None
 
+    # Portuguese / explicit patterns first (avoid greedy optional groups)
     patterns = [
+        r"(?:me\s+)?(?:manda|envia|mande|envie|send)\s+(?:me\s+)?(?:um\s+)?(?:paper|papers|artigo|artigos)\s+(?:sobre|about|on|regarding|acerca)\s+(.+)",
+        r"(?:quero|preciso\s+de)\s+(?:um\s+)?(?:paper|papers|artigo|artigos)\s+(?:sobre|about|on)\s+(.+)",
         r"(?:paper|papers|artigo|artigos|study|studies|research)\s+(?:sobre|about|on|regarding|acerca)\s+(.+)",
-        r"(?:find|get|search|busca|buscar|manda|envia|send|give)\s+(?:me\s+)?(?:a\s+)?(?:paper|papers|artigo|artigos)?\s*(?:sobre|about|on|regarding)?\s*(.+)",
-        r"(?:me\s+)?(?:manda|envia|send)\s+(?:um\s+)?(?:paper|artigo)\s+(?:sobre|about|on)\s+(.+)",
+        r"(?:find|get|search|busca|buscar|give)\s+(?:me\s+)?(?:um\s+)?(?:a\s+)?(?:paper|papers|artigo|artigos)\s+(?:sobre|about|on|regarding)\s+(.+)",
+        r"(?:find|get|search)\s+(?:for\s+)?(?:papers?|articles?|studies)\s+(?:on|about|regarding)\s+(.+)",
         r"arxiv\s+(?:search\s+)?(?:for\s+)?(.+)",
         r"(?:research|papers|articles|studies)\s+(?:about|on|that say|that affirm)\s+(.+)",
     ]
     for pattern in patterns:
         match = re.search(pattern, lower, re.IGNORECASE)
         if match:
-            topic = match.group(1).strip()
-            topic = re.sub(r"[?.!]+$", "", topic).strip()
-            if topic and len(topic) > 2:
+            topic = _clean_extracted_topic(match.group(1))
+            if is_valid_paper_topic(topic):
                 return topic
 
-    if any(kw in lower for kw in ("paper", "papers", "artigo", "arxiv")):
-        return text
-
     return None
+
+
+def resolve_arxiv_topic(user_message: str, query_rewrite: str | None = None) -> str:
+    """
+    Best topic for arXiv: prefer extraction from original user text.
+    Ignores LLM rewrites that collapse to 'paper' or other invalid tokens.
+    """
+    for source in (user_message, query_rewrite or ""):
+        if not source:
+            continue
+        extracted = extract_paper_topic(source)
+        if extracted and is_valid_paper_topic(extracted):
+            return extracted
+
+    # Full user message may still contain the topic after "sobre/about"
+    for source in (user_message, query_rewrite or ""):
+        match = re.search(
+            r"(?:sobre|about|on|regarding|acerca)\s+(.+)$",
+            source.strip(),
+            re.IGNORECASE,
+        )
+        if match:
+            topic = _clean_extracted_topic(match.group(1))
+            if is_valid_paper_topic(topic):
+                return topic
+
+    fallback = (query_rewrite or user_message).strip()
+    if is_valid_paper_topic(fallback):
+        return fallback
+    return user_message.strip()
 
 
 def detect_intent(query: str) -> str:

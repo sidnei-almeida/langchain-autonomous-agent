@@ -9,8 +9,8 @@ from langchain_community.tools import DuckDuckGoSearchRun, WikipediaQueryRun
 from langchain_community.utilities import WikipediaAPIWrapper
 
 from arxiv_search import (
-    extract_paper_topic,
     format_structured_result_for_agent,
+    resolve_arxiv_topic,
     search_scientific_papers_structured,
     wants_recent_papers,
 )
@@ -125,15 +125,17 @@ class ToolRegistry:
         self,
         query: str,
         *,
+        user_query: str | None = None,
         depth: str = "standard",
         recent_only: bool = False,
     ) -> tuple[str, dict[str, Any], list[EvidenceItem]]:
-        topic = extract_paper_topic(query) or query
+        original = user_query or query
+        topic = resolve_arxiv_topic(original, query)
         max_papers = 5 if depth == "deep" else 3
         structured = search_scientific_papers_structured(
             topic,
             max_papers=max_papers,
-            recent_only=recent_only or wants_recent_papers(query),
+            recent_only=recent_only or wants_recent_papers(original),
         )
         formatted = format_structured_result_for_agent(structured)
         evidence: list[EvidenceItem] = []
@@ -189,6 +191,7 @@ class ToolRegistry:
                 elif tool == "arxiv":
                     text, structured, evs = self.run_arxiv(
                         query,
+                        user_query=state.user_query,
                         depth=state.depth,
                         recent_only=recent,
                     )

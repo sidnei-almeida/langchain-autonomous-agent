@@ -6,6 +6,8 @@ import re
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from arxiv_search import extract_paper_topic, is_valid_paper_topic
+
 from agent.state import IntentResult, ResearchDepth
 
 INTENTS = (
@@ -54,11 +56,12 @@ def _heuristic_classify(query: str, depth: ResearchDepth = "standard") -> Intent
         tools = ["arxiv"]
         if any(kw in q for kw in RECENT_KEYWORDS):
             tools.append("web_search")
+        topic = extract_paper_topic(query) or query
         return IntentResult(
             intent="mixed_research" if len(tools) > 1 else "paper_search",
             tools_required=tools,
             research_depth="deep" if depth == "deep" else depth,
-            query_rewrite=query,
+            query_rewrite=topic,
         )
 
     compare_kw = ("compare", "versus", "vs ", "difference between", "contrast")
@@ -137,13 +140,20 @@ def classify_intent(
             rd = data.get("research_depth", depth)
             if rd not in ("quick", "standard", "deep"):
                 rd = depth
+            rewrite = str(data.get("query_rewrite") or query).strip()
+            extracted = extract_paper_topic(query)
+            if extracted and is_valid_paper_topic(extracted):
+                rewrite = extracted
+            elif not is_valid_paper_topic(rewrite):
+                rewrite = extracted or query
+
             return IntentResult(
                 intent=intent,
                 tools_required=tools,
                 needs_clarification=bool(data.get("needs_clarification", False)),
                 clarification_question=str(data.get("clarification_question") or ""),
                 research_depth=rd,
-                query_rewrite=str(data.get("query_rewrite") or query),
+                query_rewrite=rewrite,
             )
     except Exception as exc:
         print(f"Intent classifier LLM failed, using heuristics: {exc}")

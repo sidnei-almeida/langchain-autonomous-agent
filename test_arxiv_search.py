@@ -8,6 +8,8 @@ from arxiv_search import (
     build_arxiv_queries,
     extract_paper_topic,
     is_ambiguous_query,
+    is_valid_paper_topic,
+    resolve_arxiv_topic,
     score_paper_relevance,
     search_scientific_papers_structured,
 )
@@ -109,7 +111,7 @@ class TestExtraction(unittest.TestCase):
             "me manda um paper sobre human interactions"
         )
         self.assertIsNotNone(topic)
-        self.assertIn("human", topic.lower())
+        self.assertEqual(topic, "human interactions")
 
     def test_english_paper_request(self):
         topic = extract_paper_topic(
@@ -117,6 +119,25 @@ class TestExtraction(unittest.TestCase):
         )
         self.assertIsNotNone(topic)
         self.assertIn("human", topic.lower())
+
+    def test_invalid_topic_paper_only(self):
+        self.assertFalse(is_valid_paper_topic("paper"))
+
+    def test_resolve_ignores_bad_llm_rewrite(self):
+        topic = resolve_arxiv_topic(
+            "me manda um paper sobre human interactions",
+            "paper",
+        )
+        self.assertEqual(topic, "human interactions")
+
+    def test_resolve_clarification_for_ambiguous(self):
+        r = search_scientific_papers_structured(
+            resolve_arxiv_topic(
+                "me manda um paper sobre human interactions",
+                "paper",
+            )
+        )
+        self.assertEqual(r["type"], "clarification")
 
 
 class TestStructuredClarification(unittest.TestCase):
