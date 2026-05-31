@@ -25,9 +25,11 @@ Unlike a traditional RAG chatbot that retrieves once and answers, Gray Matter **
 
 | | |
 |---|---|
-| **Live API** | This Space → `/docs` |
+| **Live API (same HF Space)** | **https://salmeida-langchain-agent.hf.space** |
+| **Swagger** | https://salmeida-langchain-agent.hf.space/docs |
 | **GitHub** | [sidnei-almeida/langchain-autonomous-agent](https://github.com/sidnei-almeida/langchain-autonomous-agent) |
-| **Groq** | [console.groq.com](https://console.groq.com) |
+| **HF Space** | [salmeida/langchain-agent](https://huggingface.co/spaces/salmeida/langchain-agent) |
+| **Groq** | Secret `GROQ_API_KEY` on the Space |
 
 ---
 

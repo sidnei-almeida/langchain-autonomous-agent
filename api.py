@@ -11,7 +11,7 @@ import traceback
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel, Field
 from typing import Literal, Optional, List, Any
@@ -160,11 +160,19 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
+SPACE_PUBLIC_URL = os.getenv(
+    "SPACE_PUBLIC_URL",
+    "https://salmeida-langchain-agent.hf.space",
+)
+
+
 @app.get("/", tags=["General"])
-async def root():
-    return {
+async def root(request: Request):
+    """JSON for API clients; simple HTML landing for browser / HF Space App tab."""
+    payload = {
         "name": "Gray Matter Research Agent API",
         "version": "3.0.0",
+        "space_url": SPACE_PUBLIC_URL.rstrip("/"),
         "endpoints": {
             "health": "/health",
             "query": "/api/query",
@@ -173,7 +181,39 @@ async def root():
             "tools": "/api/tools",
             "docs": "/docs",
         },
+        "frontend_hint": {
+            "base_url": SPACE_PUBLIC_URL.rstrip("/"),
+            "chat": "POST /api/chat",
+            "query": "POST /api/query",
+            "deep_research": "POST /api/research",
+        },
     }
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept:
+        base = SPACE_PUBLIC_URL.rstrip("/")
+        html = f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/>
+<title>Gray Matter Research Agent</title>
+<style>
+  body {{ font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem;
+    background: #0d1117; color: #e6edf3; }}
+  a {{ color: #58a6ff; }} h1 {{ font-weight: 600; }}
+  code {{ background: #161b22; padding: 2px 6px; border-radius: 4px; }}
+  .badge {{ background: #238636; color: #fff; padding: 2px 8px; border-radius: 12px; font-size: 0.85rem; }}
+</style></head><body>
+<h1>Gray Matter Research Agent <span class="badge">v3.0.0</span></h1>
+<p>Agentic scientific research API — plan, search, rank evidence, synthesize.</p>
+<p><strong>Base URL:</strong> <code>{base}</code></p>
+<ul>
+  <li><a href="/docs">Swagger UI</a> — interactive API</li>
+  <li><code>POST /api/query</code> — single question</li>
+  <li><code>POST /api/chat</code> — multi-turn chat</li>
+  <li><code>POST /api/research</code> — deep research mode</li>
+</ul>
+<p>Same Hugging Face Space for backend + API. Point your Gray Matter LABS frontend to this base URL.</p>
+</body></html>"""
+        return HTMLResponse(html)
+    return payload
 
 
 @app.get("/health", response_model=HealthResponse, tags=["General"])

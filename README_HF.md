@@ -1,5 +1,15 @@
 # Hugging Face Spaces — Gray Matter LABS
 
+**Canonical Space (backend + API):**  
+**https://huggingface.co/spaces/salmeida/langchain-agent**  
+**Public URL:** **https://salmeida-langchain-agent.hf.space**
+
+Use this **same Space** for everything — no second Space needed. Point the Gray Matter LABS frontend at:
+
+```text
+https://salmeida-langchain-agent.hf.space
+```
+
 Deploy this repository as a **Docker Space** serving the FastAPI research agent on port **7860**.
 
 ---
